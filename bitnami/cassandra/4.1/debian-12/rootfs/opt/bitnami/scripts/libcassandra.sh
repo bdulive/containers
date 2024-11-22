@@ -1050,10 +1050,18 @@ wait_for_nodetool_up() {
 
     debug "Checking status with nodetool"
 
+    nodetool_cmd() {
+        local nodetool_cmd=("nodetool" "-Dcom.sun.jndi.rmiURLParsing=legacy")
+        if [[ -n "$CASSANDRA_JMX_USER" && -n "$CASSANDRA_JMX_PASSWORD" ]]; then
+            nodetool_cmd+=("-u" "$CASSANDRA_JMX_USER" "-pw" "$CASSANDRA_JMX_PASSWORD")
+        fi
+        echo "${nodetool_cmd[@]}"
+    }
+
     check_function_nodetool_node_ip() {
         # Using legacy RMI URL parsing to avoid URISyntaxException: 'Malformed IPv6 address at index 7: rmi://[127.0.0.1]:7199' error
         # https://community.datastax.com/questions/13764/java-version-for-cassandra-3113.html
-        local -r check_cmd=("nodetool" "-Dcom.sun.jndi.rmiURLParsing=legacy")
+        local -r check_cmd=($(nodetool_cmd))
         local -r check_args=("status" "--port" "$DB_JMX_PORT_NUMBER")
         local -r machine_ip="$(dns_lookup "${DB_BROADCAST_ADDRESS:-$DB_HOST}" "v4")"
         local -r check_regex="UN\s*(${DB_HOST}|${machine_ip}|127.0.0.1)"
@@ -1069,7 +1077,7 @@ wait_for_nodetool_up() {
     check_function_nodetool_node_count() {
         # Using legacy RMI URL parsing to avoid URISyntaxException: 'Malformed IPv6 address at index 7: rmi://[127.0.0.1]:7199' error
         # https://community.datastax.com/questions/13764/java-version-for-cassandra-3113.html
-        local -r check_cmd=("nodetool" "-Dcom.sun.jndi.rmiURLParsing=legacy")
+        local -r check_cmd=($(nodetool_cmd))
         local -r check_args=("status" "--port" "$DB_JMX_PORT_NUMBER")
         local -r machine_ip="$(dns_lookup "${DB_BROADCAST_ADDRESS:-$DB_HOST}" "v4")"
         local -r check_regex="UN\s*"

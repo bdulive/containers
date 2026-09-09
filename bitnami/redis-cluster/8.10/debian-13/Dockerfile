@@ -50,6 +50,12 @@ RUN apt-get update && apt-get upgrade -y && \
     apt-get clean && rm -rf /var/lib/apt/lists /var/cache/apt/archives
 RUN chmod g+rwX /opt/bitnami
 RUN find / -perm /6000 -type f -exec chmod a-s {} \; || true
+# wget was only needed to fetch the components above; nothing in this image
+# uses it at runtime (the sole HTTP helper, wait_for_http_connection, has no
+# callers). Dropping it - and, via autoremove --purge, its gnutls/idn2/nettle/
+# psl dependency chain - removes seven unfixable advisories from the shipped
+# image. This mirrors the debian-12 variant, which likewise discarded curl.
+RUN uninstall_packages wget
 
 COPY rootfs /
 RUN /opt/bitnami/scripts/redis-cluster/postunpack.sh

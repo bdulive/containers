@@ -10,22 +10,26 @@ are different.
 | Change | Reason |
 | --- | --- |
 | Base image `bitnami/minideb:bookworm` -> `bitnami/minideb:trixie` | The four OpenSSL advisories are fixed only in Debian 13 (`openssl 3.5.7-1~deb13u2`). Debian 12 still ships the vulnerable `3.0.20-1~deb12u2` with no fix available. |
-| `perl`, `perl-base`, `perl-modules-5.40`, `libperl5.40` purged | The eight perl advisories are unfixed in **every** Debian release, so removal is the only remediation. Neither Redis nor the Bitnami scripts use perl at runtime. |
+| All `perl*` / `libperl*` packages purged (`perl`, `perl-base`, `perl-modules-5.40`, `libperl5.40` on trixie today; the set is discovered at build time, not pinned) | The eight perl advisories are unfixed in **every** Debian release, so removal is the only remediation. Neither Redis nor the Bitnami scripts use perl at runtime. |
 | `libssl3` -> `libssl3t64` in the package list | Debian 13 package rename (64-bit `time_t` transition). |
 | `curl` removed, `wget` used to download components | `libcurl4` hard-depends on `libssh2-1`, which has open heap-corruption advisories with no fix in Debian 13. The `debian-12` variant already discarded curl at the end of the build (`uninstall_packages curl`), so nothing at runtime loses a dependency. |
 | `redis` / `wait-for-port` components still built for `debian-12` | Bitnami does not publish `debian-13` builds. `redis-server` links only against `libm`, `libssl`/`libcrypto`, `libc`, `libz` and `libzstd`, all of which Debian 13 provides at compatible SONAMEs; `wait-for-port` is a static-ish Go binary needing only `libc`. |
 
 ### Script changes
 
-Two library functions had to lose their perl/curl dependency. Neither is reachable in
-this image - `redis-cluster` calls neither - but both would have become silently broken:
+**None.** `prebuildfs/` and `rootfs/` are byte-identical to the `debian-12` variant,
+which keeps this variant trivial to rebase onto future upstream releases.
 
-- [`prebuildfs/opt/bitnami/scripts/libfile.sh`](prebuildfs/opt/bitnami/scripts/libfile.sh) - `replace_in_file_multiline` now uses `sed -z -E`, which gives the same "slurp the file, let `.` match newlines" semantics as perl's `undef $/` plus the `/s` flag. sed's ERE is narrower than perl's regex, so a future caller using perl-only syntax (lookaround, lazy quantifiers, `$1` backrefs) must translate it first. (`replace_in_file`, which `redis_conf_set` actually calls, already used `sed`.)
-- [`prebuildfs/opt/bitnami/scripts/libnet.sh`](prebuildfs/opt/bitnami/scripts/libnet.sh) - `wait_for_http_connection` now uses `wget`. Note that `wget`, unlike `curl --silent`, exits non-zero on a non-2xx response.
+Two shared library functions still reference tools this image no longer has, and are
+deliberately left alone because neither is reachable here:
 
-Everything else - entrypoint, `run.sh`, `setup.sh`, environment variables, exposed port
-6379, cluster bootstrap logic, non-root UID 1001 - is unchanged from the `debian-12`
-variant.
+- `libfile.sh` `replace_in_file_multiline` calls `perl`. Nothing in the image calls it -
+  `redis_conf_set` goes through `replace_in_file`, which uses `sed`.
+- `libnet.sh` `wait_for_http_connection` calls `curl`. Nothing calls it either, and it
+  was already broken in `debian-12`, which ends its build with `uninstall_packages curl`.
+
+A future caller of either would need to convert it first. Neither affects the CVE
+result, which comes entirely from the package changes in the Dockerfile.
 
 ## CVE remediation map
 

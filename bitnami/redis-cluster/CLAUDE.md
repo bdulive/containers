@@ -117,8 +117,12 @@ Expect no output from all three.
 
 `origin` is the fork, `upstream` is `bitnami/containers`. When pulling upstream
 releases, `8.10/debian-12/` will move and `8.10/debian-13/` will not. After a Redis
-release bump, re-diff the two variants
-(`diff -ru 8.10/debian-12 8.10/debian-13`) so the two local script changes
-(`libfile.sh`, `libnet.sh`) stay rebased onto the new upstream scripts, and update the
-component version and checksums in the debian-13 Dockerfile and
-`prebuildfs/.../checksums/`.
+release bump, copy `prebuildfs/` and `rootfs/` across verbatim — there are deliberately
+**no local script changes**, so `diff -rq 8.10/debian-12 8.10/debian-13` should report
+only `Dockerfile`, `docker-compose.yml` and `README.md`. Then update the component
+version and checksums in the debian-13 Dockerfile and `prebuildfs/.../checksums/`.
+
+Keep it that way. Only the Dockerfile carries the remediation; edits to the shared
+libraries buy nothing for the CVE result and cost you a rebase conflict every release.
+The two functions that reference the removed `perl` and `curl` are unreachable in this
+image — see the variant README.

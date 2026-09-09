@@ -73,17 +73,30 @@ A cold build compiles Erlang and takes 15-25 minutes; on Apple Silicon build
 `linux/arm64` natively and confirm package names/versions separately on amd64
 rather than emulating.
 
-Scan (Trivy cannot read the daemon's image directly here, so go through the
-exported filesystem):
+Scan. Neither Trivy nor Docker Scout can read the daemon's image directly here
+(Docker 29's OCI layout - `archive/tar: invalid tar header`), so go through the
+exported filesystem:
 
 ```console
 docker create --name probe bitnami-rabbitmq:4.3.5-debian-13-r0
-mkdir fs && docker export probe | tar -x -C fs
+mkdir fs && docker export probe | tar -x -C fs && docker rm -f probe
+
+grype db update && grype dir:fs                    # primary
 trivy rootfs --scanners vuln --severity CRITICAL,HIGH fs
+docker scout cves --only-severity critical,high fs://fs
 ```
 
-Treat a finding as actionable only if it has a non-empty `FixedVersion`; the
-residual HIGHs in this image are all `no fix available` in Debian 13.
+**Use grype as the primary scanner.** DB coverage of the 26 CVEs this variant was
+built to clear differs wildly: grype 23/26, Docker Scout 9/26, Trivy 4/26. A clean
+Trivy run proves almost nothing here; a grype before/after against the debian-12
+baseline is the real evidence. Some CVEs (the three `libssh2` ones) are in no
+database yet and can only be verified by the package being absent - always pair a
+scan with the per-package checks in the variant's README.
+
+Treat a finding as actionable only if a fix exists - `FixedVersion` in Trivy,
+fix state `fixed` in grype. The pass condition is **zero fixable findings**, not a
+zero total: the residual findings in this image are all `wont-fix`/`not-fixed`
+in Debian 13.
 
 Smoke test:
 

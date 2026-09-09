@@ -73,9 +73,27 @@ docker build \
 
 ## Verify
 
-Trivy is necessary but **not sufficient** here - see [How each CVE was
-verified](#how-each-cve-was-verified) for why. The per-package evidence below is
-what actually re-validates the remediation map.
+Use **grype** as the primary scanner, not Trivy. For this image Trivy's database
+carries only 4 of the 26 CVEs from the scan report, while grype carries 23 - see
+[Scanner coverage](#scanner-coverage). Both scanners need the *exported rootfs*:
+Docker 29 writes an OCI layout that Trivy and Docker Scout reject when reading the
+daemon image directly (`archive/tar: invalid tar header`).
+
+```console
+docker create --name probe bitnami/rabbitmq:4.3.5-debian-13-r0
+mkdir fs && docker export probe | tar -x -C fs && docker rm -f probe
+
+grype db update
+grype dir:fs                       # expect: no finding with fix state "fixed"
+trivy rootfs --scanners vuln --severity CRITICAL,HIGH fs
+docker scout cves --only-severity critical,high fs://fs
+```
+
+The pass condition is **no finding with an available fix**, not a zero total:
+everything left in this image is `wont-fix` or `not-fixed` upstream.
+
+Three of the 26 (the libssh2 CVEs) are in no scanner's database yet, so they are
+verified by the package being absent. The per-package checks:
 
 ```console
 # OpenSSL: the Debian changelog names the four CVEs it fixes
@@ -105,47 +123,76 @@ docker exec rmq-verify rabbitmq-diagnostics -q check_port_connectivity
 Built and smoke-tested for `linux/arm64` on 2026-09-09 (the same Dockerfile builds
 `linux/amd64`; the Debian 13 package set and versions were confirmed on amd64).
 
-Trivy 0.74.0 (vulnerability DB of 2026-09-09), `CRITICAL,HIGH`, OS packages plus
-Bitnami components, scanning the exported rootfs:
+Grype 0.118.0 (DB v6.1.9, built 2026-09-08), all severities, exported rootfs:
 
-| Image | Findings | CRITICAL | HIGH | Distinct CVEs |
+| Image | Matches | Critical | High | **With an available fix** |
 | --- | --- | --- | --- | --- |
-| `4.3.5-debian-12` (baseline, built from the sibling directory) | 91 | 13 | 78 | 24 |
-| `4.3.5-debian-13-r0` | 47 | 0 | 47 | 12 |
+| `4.3.5-debian-12` (baseline, built from the sibling directory) | 443 | 36 | 110 | **52** |
+| `4.3.5-debian-13-r0` | 191 | 4 | 57 | **0** |
 
-Every one of the 47 residual HIGH findings has an empty `FixedVersion` - no fix
-exists in Debian 13 today. They are in `util-linux`/`login`/`mount` (12), the
-`libblkid1`/`libmount1`/`libuuid1`/`libsmartcols1`/`liblastlog2-2` family (20),
-`bsdutils` (4), `libsqlite3-0` (2), `wget` (2), and one each in `gzip`, `libacl1`,
-`libncursesw6`, `ncurses-base`, `libsystemd0`, `libtinfo6`, `libudev1`. None of
-them appear in the scan report this image was built to clear.
+Every remaining finding is `wont-fix` or `not-fixed` upstream - nothing left can be
+cleared by rebuilding. All 52 fixable baseline findings were against `erlang`.
 
-### How each CVE was verified
+Trivy 0.74.0 (DB 2026-09-09), `CRITICAL,HIGH`, for comparison:
 
-Trivy's database carries only **4 of the 26** CVEs from the scan report:
-CVE-2026-13221, CVE-2026-48962, CVE-2026-57432 and CVE-2026-57433, all against
-`perl`. Those four are reported on the baseline and are gone from
-`4.3.5-debian-13-r0`. The other **22 are unknown to Trivy** - they appear in
-neither scan, so the drop from 91 to 47 findings does not by itself prove
-anything about them. Re-running Trivy will never re-validate the remediation map;
-these are the checks that do:
+| Image | Findings | CRITICAL | HIGH | With a `FixedVersion` |
+| --- | --- | --- | --- | --- |
+| `4.3.5-debian-12` (baseline) | 91 | 13 | 78 | 0 |
+| `4.3.5-debian-13-r0` | 47 | 0 | 47 | 0 |
+
+Docker Scout, `critical,high`: 14 findings (3C/11H) on the baseline, **1** on this
+image - CVE-2026-85091 in `zlib`, `not fixed`, and present in the baseline too.
+
+Two findings this image carries that are *not* regressions from the Debian 13 move,
+because the debian-12 baseline has them as well:
+
+- **CVE-2026-5450** (glibc, `wont-fix`) - grype's 4 Criticals are this one CVE
+  counted across `libc6`, `libc-bin`, `libc-l10n` and `locales`.
+- **CVE-2026-85091** (zlib, `not fixed`) - Scout's single High.
+
+### Scanner coverage
+
+The three scanners disagree sharply about the 26 CVEs in the scan report, so the
+choice of tool matters more than usual here:
+
+| Scanner | Carries how many of the 26 | Still present in this image |
+| --- | --- | --- |
+| grype 0.118.0 | **23** | 0 |
+| Docker Scout | 9 | 0 |
+| Trivy 0.74.0 | 4 (all `perl`) | 0 |
+
+Grype reports 23 of the 26 on the debian-12 baseline and none on this image, which
+is the direct before/after evidence. The remaining three - CVE-2026-58050,
+CVE-2026-66032, CVE-2026-66034, all `libssh2` - are in **no** scanner's database
+yet (grype reports zero findings of any kind against `libssh2-1` on the baseline),
+so they rest on the package being absent.
+
+Per CVE class:
 
 | CVEs | Evidence |
 | --- | --- |
-| OpenSSL (4): CVE-2026-75803, -63072, -63076, -54874 | `/usr/share/doc/openssl/changelog.Debian.gz` in the built image names all four as fixed in `3.5.7-1~deb13u2`; installed version is `3.5.7`. |
-| Erlang/OTP (11) | Image reports OTP `27.3.4.17`, above the highest fix version any of the 11 requires (`27.3.4.15`). Per-application versions `inets-9.3.2.7`, `ssl-11.2.12.12`, `public_key-1.17.1.5`, `erts-15.2.7.13`, `crypto-5.5.3.5` each meet or exceed the fixed version named in the corresponding advisory. |
-| perl (8) | Package and files entirely absent: zero `perl*`/`libperl*` entries in the dpkg status, no `/usr/bin/perl`. Removal, not an upgrade - no Debian release ships a fix. |
-| libssh2 (3) | Package and files entirely absent: `find / -name 'libssh2*'` is empty, and `curl`, the only thing that pulled it in, is not installed. |
+| OpenSSL (4): CVE-2026-75803, -63072, -63076, -54874 | Reported by grype and Scout on the baseline, by neither here. `/usr/share/doc/openssl/changelog.Debian.gz` names all four as fixed in `3.5.7-1~deb13u2`; installed version is `3.5.7`. |
+| Erlang/OTP (11) | Reported by grype on the baseline, not here. Image reports OTP `27.3.4.17`, above the highest fix version any of the 11 requires (`27.3.4.15`); `inets-9.3.2.7`, `ssl-11.2.12.12`, `public_key-1.17.1.5`, `erts-15.2.7.13`, `crypto-5.5.3.5` each meet or exceed their advisory's fix version. |
+| perl (8) | Reported by all three scanners on the baseline, by none here. Package and files entirely absent - removal, not an upgrade, since no Debian release ships a fix. |
+| libssh2 (3) | Not in any scanner database. `find / -name 'libssh2*'` is empty and `curl`, the only thing that pulled it in, is not installed. |
+
+### Fixed beyond the scan report
+
+The source-built OTP also cleared 14 HIGH Erlang CVEs that the prebuilt Bitnami
+`erlang` component still carries and that were not in the scan report:
+CVE-2025-48041, CVE-2026-42792, CVE-2026-55951, CVE-2026-59250, CVE-2026-66357,
+CVE-2026-66835, CVE-2026-69664, CVE-2026-70399, CVE-2026-71380, CVE-2026-73270,
+CVE-2026-73276, CVE-2026-73812, CVE-2026-74835, CVE-2026-75538.
 
 Runtime checks against the built image:
 
-- `rabbitmq-diagnostics check_running`, `check_port_connectivity`, `check_virtual_hosts` all pass; broker boots in ~1.8s
+- `rabbitmq-diagnostics check_running`, `check_port_connectivity`, `check_virtual_hosts` all pass; broker boots in ~2.2s
 - `RabbitMQ version: 4.3.5`, `Erlang/OTP 27 [erts-15.2.7.13]`, `Crypto library: OpenSSL 3.5.7`
 - Queue declare, publish and consume over the management API succeed
 - The `wget` path in `apicheck.sh` returns `{"status":"ok"}`
 - `rabbitmq_hash_password` (which shells out to the `openssl` CLI) produces a valid 92-char hash
 - `install_packages` still works despite the perl purge
-- Trivy still reports the Erlang component (via a generated SPDX document) at `27.3.4.17`, so the runtime is not hidden from SBOM/CPE scanners
+- Scanners still see the Erlang component (via the generated SPDX document) at `27.3.4.17`, so the runtime is not hidden from SBOM/CPE scanners
 
 ## Maintenance note
 

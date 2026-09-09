@@ -52,7 +52,9 @@ Non-root container images add an extra layer of security and are generally recom
 clears all CVEs currently reported against `4.3.5-debian-12`: it moves the base to
 `minideb:trixie` for the fixed OpenSSL, compiles Erlang/OTP at the newest
 `27.3.4.x` patch release, drops `curl` (and with it `libssh2-1`) in favour of
-`wget`, and removes Perl. See
+`wget` (kept, because `apicheck.sh` and the plugin downloader use it at runtime),
+and removes Perl. Published as
+`insightfinderinc/bitnami-rabbitmq:4.3.5-debian-13-r0` (amd64 + arm64). See
 [4.3/debian-13/README.md](4.3/debian-13/README.md)
 for the full change list, CVE map and verification results.
 

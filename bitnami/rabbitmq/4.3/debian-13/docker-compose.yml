@@ -3,8 +3,9 @@
 
 services:
   rabbitmq:
-    # This variant is not published to a registry - build it from this
-    # directory. Compose reuses the local image once it exists.
+    # Published as insightfinderinc/bitnami-rabbitmq:4.3.5-debian-13-r0
+    # (linux/amd64 + linux/arm64). Building from this directory produces the
+    # same image; compose reuses the local one once it exists.
     build:
       context: .
     image: bitnami/rabbitmq:4.3.5-debian-13-r0

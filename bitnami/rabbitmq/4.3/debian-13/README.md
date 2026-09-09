@@ -56,6 +56,15 @@ CVE-2026-66034, CVE-2026-58050, CVE-2026-66032
 
 ## Build
 
+This variant is published as a multi-architecture image (`linux/amd64`,
+`linux/arm64`):
+
+```console
+docker pull insightfinderinc/bitnami-rabbitmq:4.3.5-debian-13-r0
+```
+
+To build it yourself instead:
+
 ```console
 docker build -t bitnami/rabbitmq:4.3.5-debian-13-r0 .
 ```
@@ -120,8 +129,14 @@ docker exec rmq-verify rabbitmq-diagnostics -q check_port_connectivity
 
 ## Verification results
 
-Built and smoke-tested for `linux/arm64` on 2026-09-09 (the same Dockerfile builds
-`linux/amd64`; the Debian 13 package set and versions were confirmed on amd64).
+Built and smoke-tested for **both `linux/amd64` and `linux/arm64`** on 2026-09-09.
+On each architecture: the broker reaches `rabbitmqctl status` reporting RabbitMQ
+4.3.5 on `erts-15.2.7.13` (OTP 27.3.4.17, source-built) with `Crypto library:
+OpenSSL 3.5.7`, and a durable queue survives declare -> publish -> consume. On
+arm64 a real AMQP client (pika, port 5672) additionally exercised 100-message
+classic queues, 50-message quorum queues and topic-exchange routing including a
+negative match, and all four durable queues plus a persisted message survived a
+container restart.
 
 Grype 0.118.0 (DB v6.1.9, built 2026-09-08), all severities, exported rootfs:
 

@@ -47,6 +47,15 @@ CVE-2026-48959, CVE-2026-48961, CVE-2026-48962, CVE-2026-57432
 
 ## Build
 
+This variant is published as a multi-architecture image (`linux/amd64`,
+`linux/arm64`):
+
+```console
+docker pull insightfinderinc/bitnami-redis-cluster:8.10.1-debian-13-r0
+```
+
+To build it yourself instead:
+
 ```console
 docker build -t bitnami/redis-cluster:8.10.1-debian-13-r0 .
 ```
@@ -98,13 +107,17 @@ docker compose -p rcverify down -v
 
 ## Verification results
 
-`linux/arm64`, grype 0.118.0 and Trivy 0.74.0, databases as of 2026-09-09. The
-`linux/amd64` image was built and scanned separately and is identical on every row
-of this table (156 grype findings, 2 CRITICAL, 0 fixable, 0 of the 12).
+grype 0.118.0 and Trivy 0.74.0, databases as of 2026-09-09. Both `linux/amd64` and
+`linux/arm64` were built and scanned, and are identical on every row of this table
+(145 grype findings, 2 CRITICAL, 0 fixable, 0 of the 12).
+
+The grype total dropped from 156 to 145 when `uninstall_packages wget` was added:
+the seven `wget` advisories and their gnutls/idn2/nettle/psl dependants leave with
+the package.
 
 | | `8.10.1-debian-12-r0` (baseline) | `8.10.1-debian-13-r0` |
 | --- | --- | --- |
-| grype, all severities | 282 findings, 24 CRITICAL | **156 findings, 2 CRITICAL** |
+| grype, all severities | 282 findings, 24 CRITICAL | **145 findings, 2 CRITICAL** |
 | grype, findings with an available fix | 0 | **0** |
 | Trivy, CRITICAL+HIGH | 80 findings, 13 CRITICAL | **47 findings, 0 CRITICAL** |
 | Trivy, findings with a `FixedVersion` | 0 | **0** |
@@ -117,7 +130,9 @@ this scan report.
 Functional check: a 6-node cluster from [`docker-compose.yml`](docker-compose.yml)
 reached `cluster_state:ok` with 3 masters, 3 replicas and all 16384 slots assigned;
 keys written through one node were read back through another via `-c` redirects, and
-`info replication` showed the replica online.
+`info replication` showed the replica online. Killing a master container promoted its
+replica and the cluster returned to `cluster_state:ok` in ~3s with every key still
+readable and writes accepted afterwards.
 
 ### Scanner coverage
 

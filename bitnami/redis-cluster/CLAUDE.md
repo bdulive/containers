@@ -32,10 +32,14 @@ Facts worth not re-deriving:
 - **Perl is not used at runtime.** `redis_conf_set` goes through `replace_in_file`,
   which uses `sed`. Only `replace_in_file_multiline` used `perl`, and nothing in the
   image calls it. The other `perl` grep hits in the scripts are the word "properly".
-- **`curl` is not used at runtime either.** The debian-12 Dockerfile installs it only
+- **No HTTP client is used at runtime.** The debian-12 Dockerfile installs `curl` only
   to download components and ends with `uninstall_packages curl`. The one runtime call
   site, `libnet.sh`'s `wait_for_http_connection`, is unreachable — and was already
-  broken in debian-12 for that reason. debian-13 uses `wget` throughout.
+  broken in debian-12 for that reason. debian-13 downloads with `wget` and must end
+  with `uninstall_packages wget` for the same reason: left installed, wget contributes
+  seven advisories (three HIGH, none fixable) plus its gnutls/idn2/nettle/psl chain to
+  an image whose whole point is CVE remediation. This is easy to lose when rebasing —
+  if the grype total jumps by ~10, check the wget purge is still there.
 - **The `openssl` CLI is not needed** — unlike rabbitmq, nothing hashes passwords with
   it. It comes in as a dependency of the base, not as an explicit install.
 - The 6-node `docker-compose.yml` is the real smoke test: node-5 carries
@@ -68,8 +72,17 @@ cd 8.10/debian-13
 docker build -t bitnami/redis-cluster:8.10.1-debian-13-r0 .
 ```
 
-On Apple Silicon build `linux/arm64` natively and confirm package names/versions
-separately on amd64 rather than emulating.
+On Apple Silicon build `linux/arm64` natively for functional iteration. Emulated
+`linux/amd64` is cheap for this image (no source compilation — it is prebuilt
+components only), so build and scan both legs before publishing:
+
+```console
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t insightfinderinc/bitnami-redis-cluster:8.10.1-debian-13-r0 --push .
+```
+
+Both architectures should report identical grype totals; a divergence means an
+arch-specific package slipped in.
 
 Scan through the *exported filesystem*: Docker 29 writes an OCI layout that Trivy 0.74
 rejects when reading the daemon image directly (`archive/tar: invalid tar header`).

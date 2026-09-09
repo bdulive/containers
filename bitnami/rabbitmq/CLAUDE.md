@@ -69,9 +69,19 @@ docker build --provenance=false --sbom=false -t bitnami-rabbitmq:4.3.5-debian-13
 `--provenance=false --sbom=false` matters: with default attestations, Docker 29
 writes an OCI layout that Trivy 0.74 rejects with `archive/tar: invalid tar header`.
 
-A cold build compiles Erlang and takes 15-25 minutes; on Apple Silicon build
-`linux/arm64` natively and confirm package names/versions separately on amd64
-rather than emulating.
+A cold build compiles Erlang and takes 15-25 minutes natively. Emulated
+`linux/amd64` on Apple Silicon does work end to end - the OTP source build
+completes and the resulting broker boots and serves traffic - but takes roughly
+20 minutes on top of that, so build `linux/arm64` first for the functional
+iteration and reach for the emulated amd64 leg only when you need to publish:
+
+```console
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t insightfinderinc/bitnami-rabbitmq:4.3.5-debian-13-r0 --push .
+```
+
+Both architecture legs come from the buildx cache if you built them with
+`--load` first, so the push itself is layer upload only (~12 min for this image).
 
 Scan. Neither Trivy nor Docker Scout can read the daemon's image directly here
 (Docker 29's OCI layout - `archive/tar: invalid tar header`), so go through the

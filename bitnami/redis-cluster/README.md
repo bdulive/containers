@@ -40,6 +40,16 @@ If you are looking for our previous generation of images based on Debian Linux, 
 
 Deploying Bitnami applications as Helm Charts is the easiest way to get started with our applications on Kubernetes. Read more about the installation in the [Bitnami Redis(R) Cluster Chart GitHub repository](https://github.com/bitnami/charts/tree/master/bitnami/redis-cluster).
 
+## CVE-remediated Debian 13 variant
+
+`8.10/debian-13/` is a hand-maintained variant of the Redis(R) Cluster 8.10.1 image
+that clears all CVEs currently reported against `8.10.1-debian-12`: it moves the base
+to `minideb:trixie` for the fixed OpenSSL, removes Perl, and drops `curl` (and with it
+`libssh2-1`) in favour of `wget`. The published `redis` and `wait-for-port` components
+are reused unchanged. See
+[8.10/debian-13/README.md](8.10/debian-13/README.md)
+for the full change list, CVE map and verification results.
+
 ## Supported tags and respective `Dockerfile` links
 
 Learn more about the Bitnami tagging policy and the difference between rolling tags and immutable tags [in our documentation page](https://techdocs.broadcom.com/us/en/vmware-tanzu/application-catalog/tanzu-application-catalog/services/tac-doc/apps-tutorials-understand-rolling-tags-containers-index.html).

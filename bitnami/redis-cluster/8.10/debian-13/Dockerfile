@@ -39,7 +39,7 @@ RUN --mount=type=secret,id=downloads_url,env=SECRET_DOWNLOADS_URL \
     ) ; \
     for COMPONENT in "${COMPONENTS[@]}"; do \
       if [ ! -f "${COMPONENT}.tar.gz" ]; then \
-        wget --quiet --tries=3 "${DOWNLOADS_URL}/${COMPONENT}.tar.gz" ; \
+        wget --no-verbose --tries=3 "${DOWNLOADS_URL}/${COMPONENT}.tar.gz" ; \
       fi ; \
       sha256sum -c "/opt/bitnami/checksums/${COMPONENT}.tar.gz.sha256" ; \
       tar -zxf "${COMPONENT}.tar.gz" -C /opt/bitnami --strip-components=2 --no-same-owner ; \
@@ -58,10 +58,30 @@ RUN /opt/bitnami/scripts/redis-cluster/postunpack.sh
 # removal is the only available remediation. perl-base is marked Essential (it
 # backs debconf), hence the force flags - this has to stay the final dpkg/apt
 # operation of the build.
-RUN dpkg --purge --force-remove-essential --force-depends \
-      perl perl-modules-5.40 libperl5.40 perl-base && \
+#
+# The package set is discovered rather than pinned: Debian versions the module
+# and library packages (perl-modules-5.40, libperl5.40), so a hardcoded list
+# would silently stop matching after a base bump. dpkg --purge only *warns* on
+# a package that is not installed, so a stale list would leave the build green
+# with eight CVEs quietly reinstated. The trailing assertions are the real
+# guard - they fail the build if anything perl survives.
+#
+# dpkg-query runs without -f: a '\${Package}' format string in a RUN line is
+# mangled by the Dockerfile parser's own \$ handling, which silently yields an
+# empty package list. The default 'package\tversion' output plus cut -f1 is
+# equivalent and has nothing for the parser to touch.
+#
+# Note for downstream images: purging Essential perl-base leaves
+# /usr/sbin/dpkg-preconfigure missing, so a later install_packages prints a
+# harmless "not found" warning. It still succeeds, but installing a package
+# whose maintainer scripts need perl will pull perl-base back in and undo this.
+RUN PERL_PKGS="$(dpkg-query -W | cut -f1 | grep -E '^(perl|libperl)' || true)" && \
+    if [ -n "$PERL_PKGS" ]; then \
+      dpkg --purge --force-remove-essential --force-depends $PERL_PKGS ; \
+    fi && \
     rm -rf /usr/share/perl /usr/share/perl5 /usr/lib/*/perl /usr/lib/*/perl5 && \
-    ! command -v perl
+    ! command -v perl && \
+    ! dpkg-query -W | cut -f1 | grep -qE '^(perl|libperl)'
 ENV APP_VERSION="8.10.1" \
     BITNAMI_APP_NAME="redis-cluster" \
     IMAGE_REVISION="0" \

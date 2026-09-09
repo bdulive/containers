@@ -158,7 +158,8 @@ parse_uri() {
 #   $2 - Maximum amount of retries (optional)
 #   $3 - Time between retries (optional)
 # Returns:
-#   true if the HTTP connection succeeded, false otherwise
+#   true if the URL returned a 2xx response, false otherwise
+#   (note: this is stricter than a liveness check - see the wget note below)
 #########################
 wait_for_http_connection() {
     local url="${1:?missing url}"
@@ -168,7 +169,7 @@ wait_for_http_connection() {
     # excluded from this image for security reasons (see the Dockerfile).
     # Nothing in this image calls this function; note that wget, unlike
     # "curl --silent", exits non-zero on a non-2xx response.
-    if ! retry_while "debug_execute wget --quiet --output-document=/dev/null ${url}" "$retries" "$sleep_time"; then
+    if ! retry_while "debug_execute wget --no-verbose --output-document=/dev/null ${url}" "$retries" "$sleep_time"; then
         error "Could not connect to ${url}"
         return 1
     fi

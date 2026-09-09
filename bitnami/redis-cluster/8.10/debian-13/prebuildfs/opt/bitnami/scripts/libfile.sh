@@ -62,7 +62,10 @@ replace_in_file_multiline() {
     # is not installed in this image (see the Dockerfile). Nothing in this image
     # calls this function; sed's ERE is narrower than perl's regex, so a caller
     # using perl-only syntax (lookaround, lazy quantifiers, "$1" backrefs) would
-    # need to translate it first.
+    # need to translate it first. Note also that sed reads an unescaped "&" in
+    # the replacement as "the whole match" where perl treated it as a literal,
+    # so a substitute_regex containing "&" must escape it - compare
+    # libredis.sh, which already does this for replace_in_file.
     result="$(sed -z -E "s${del}${match_regex}${del}${substitute_regex}${del}g" "$filename")"
     echo "$result" > "$filename"
 }

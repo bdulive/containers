@@ -53,8 +53,24 @@ Work in this order; each step tells you whether the next is even needed.
    per-suite rows, not the description:
    `curl -sS https://security-tracker.debian.org/tracker/CVE-YYYY-NNNNN`
    A `bookworm (security) | <ver> | fixed` row means a plain rebuild is the fix.
-   `vulnerable` on every suite means **no Debian fix exists** and the only options are
-   removing the package or changing base release.
+   `vulnerable` on every suite means **no Debian fix exists** and the remaining options
+   are removing the package or changing base release - and both are usually worse than
+   the finding, so check the next two bullets before reaching for either.
+
+   - **An upgrade does not necessarily clear the scan row, and that is not a build
+     bug.** Distro matchers key on the suite: when Debian's trixie feed has no fixed
+     version, grype emits `versionConstraint: "none (unknown)"` and flags the package
+     at *any* version, `wont-fix`. Confirm with
+     `grype dir:fs -o json | jq '.matches[] | select(.vulnerability.id=="CVE-...")'`
+     before concluding an upgrade failed. When the constraint is "none", no version of
+     the package clears the row and the only honest close-out is a vendor response.
+     The variant README's "Third-party rescan" section records the reasoning for the
+     four advisories currently in that state.
+   - **Read the advisory's affected range against the *upstream* version, not the
+     Debian one.** CVE-2026-85091 covers zlib 1.3.1.2 through 1.3.2; trixie's
+     `1:1.3.dfsg+really1.3.1-1+b1` is upstream 1.3.1, and `gz_vacate()` does not exist
+     in the `v1.3.1` source tree at all. Debian marks the suite vulnerable anyway, so
+     the tracker alone would have sent you chasing a nonexistent fix.
 2. **Check what components exist before assuming a bump is possible.** Bitnami
    publishes components for base releases only. Probe before planning:
    `curl -o /dev/null -w '%{http_code}' https://downloads.bitnami.com/files/stacksmith/redis-<ver>-<rev>-linux-amd64-debian-12.tar.gz.sha256`
@@ -65,11 +81,45 @@ Work in this order; each step tells you whether the next is even needed.
    `time_t` transition). `install_packages` fails loudly on an unknown name, so this
    surfaces at build time rather than silently.
 
+### Do not retry: removing libacl1/libattr1
+
+Prototyped and rejected on 2026-09-14. Purging `coreutils`/`tar`/`sed`/`passwd`/
+`adduser` does take `libacl1` and `libattr1` with it, and both scanners then stop
+reporting CVE-2026-54369/-54370/-54371 - that part works. The replacement userland is
+what kills it:
+
+| replacement | grype total / CRITICAL / HIGH | verdict |
+| --- | --- | --- |
+| none (current `-r1`) | 139 / 0 / 44 | the three rows are reported |
+| busybox 1.37.0 | 140 / 0 / 50 | rows gone, but busybox adds **14 advisories of its own, 8 HIGH, all wont-fix** - a worse report than it fixes |
+| toybox 0.8.9 | 126 / 0 / 42 | rows gone, toybox itself carries **zero** CVEs - but it has no `tr` or `dd` |
+
+toybox is the only version worth having and it cannot ship as-is: the Bitnami scripts
+use `tr` on live paths and the failure is **silent**, not loud. `run.sh` parses
+`REDIS_NODES` through `tr`, so the container still starts and Redis still boots, with an
+empty node list and `Cluster topology covers 0 of 16384 slots`:
+
+```text
+toybox image -> parsed 0 nodes: []
+current -r1  -> parsed 6 nodes: [n0 n1 n2 n3 n4 n5]
+```
+
+Making it work needs ~12 edits in `prebuildfs/` and `rootfs/` (the `tr ',;' ' '` splits
+become `${var//[,;]/ }`; the RabbitMQ Erlang cookie and password salt need `openssl rand`
+and `head -c`). Those are the files diffed against upstream on every Bitnami release, so
+this was rejected deliberately: **the point of this variant is that it rebases cleanly.**
+Dockerfile-level divergence is free here, script-level divergence is not.
+
+Two traps if anyone does revisit it: `busybox --install` symlinks *every* applet and
+shadows the real `dpkg`, `grep` and `find`; and `<applet-list> | grep -qx` under
+`pipefail` reports failure for the names that *do* match, because `grep -q` exits early
+and the producer dies of SIGPIPE - which silently yields an empty applet list.
+
 ## Build and verify
 
 ```console
 cd 8.10/debian-13
-docker build -t bitnami/redis-cluster:8.10.1-debian-13-r0 .
+docker build -t bitnami/redis-cluster:8.10.1-debian-13-r1 .
 ```
 
 On Apple Silicon build `linux/arm64` natively for functional iteration. Emulated
@@ -78,20 +128,23 @@ components only), so build and scan both legs before publishing:
 
 ```console
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t insightfinderinc/bitnami-redis-cluster:8.10.1-debian-13-r0 --push .
+  -t insightfinderinc/bitnami-redis-cluster:8.10.1-debian-13-r1 --push .
 ```
 
 Both architectures should report identical grype totals; a divergence means an
 arch-specific package slipped in.
 
-Scan through the *exported filesystem*: Docker 29 writes an OCI layout that Trivy 0.74
-rejects when reading the daemon image directly (`archive/tar: invalid tar header`).
+Scan through the *exported filesystem*: Docker 29 writes an OCI layout that **every**
+scanner rejects when reading the daemon image directly (`archive/tar: invalid tar
+header` from grype, Trivy and Scout alike). Scanning a pushed registry reference works
+for all three; only the local daemon image needs the export.
 
 ```console
-docker create --name probe bitnami/redis-cluster:8.10.1-debian-13-r0
+docker create --name probe bitnami/redis-cluster:8.10.1-debian-13-r1
 mkdir fs && docker export probe | tar -x -C fs && docker rm -f probe
 
-grype db update && grype dir:fs                    # primary
+grype db update && grype dir:fs                    # primary, all severities
+grype dir:fs --only-fixed                          # the pass condition: must be empty
 trivy rootfs --scanners vuln --severity CRITICAL,HIGH fs
 ```
 
@@ -120,7 +173,7 @@ docker compose -p rcverify down -v
 And confirm the removals actually held:
 
 ```console
-docker run --rm --entrypoint bash bitnami/redis-cluster:8.10.1-debian-13-r0 -c \
+docker run --rm --entrypoint bash bitnami/redis-cluster:8.10.1-debian-13-r1 -c \
   'command -v perl; command -v curl; dpkg-query -W | grep -E "libssh2|libcurl"'
 ```
 

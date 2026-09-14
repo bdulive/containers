@@ -48,7 +48,8 @@ to `minideb:trixie` for the fixed OpenSSL, removes Perl, and drops `curl` (and w
 `libssh2-1`) in favour of `wget`, which is itself purged once the components are
 fetched - the shipped image has no HTTP client at all. The published `redis` and
 `wait-for-port` components are reused unchanged. Published as
-`insightfinderinc/bitnami-redis-cluster:8.10.1-debian-13-r0` (amd64 + arm64). See
+`insightfinderinc/bitnami-redis-cluster:8.10.1-debian-13-r0` (amd64 + arm64); `-r1`,
+a rebuild on the current Debian 13 package set, is built and verified but not yet pushed. See
 [8.10/debian-13/README.md](8.10/debian-13/README.md)
 for the full change list, CVE map and verification results.
 

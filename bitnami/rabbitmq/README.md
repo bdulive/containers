@@ -54,7 +54,8 @@ clears all CVEs currently reported against `4.3.5-debian-12`: it moves the base 
 `27.3.4.x` patch release, drops `curl` (and with it `libssh2-1`) in favour of
 `wget` (kept, because `apicheck.sh` and the plugin downloader use it at runtime),
 and removes Perl. Published as
-`insightfinderinc/bitnami-rabbitmq:4.3.5-debian-13-r0` (amd64 + arm64). See
+`insightfinderinc/bitnami-rabbitmq:4.3.5-debian-13-r0` (amd64 + arm64); `-r1`, which adds
+a rebuild on the current Debian 13 package set, is built and verified but not yet pushed. See
 [4.3/debian-13/README.md](4.3/debian-13/README.md)
 for the full change list, CVE map and verification results.
 

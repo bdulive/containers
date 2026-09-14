@@ -3,12 +3,12 @@
 
 services:
   rabbitmq:
-    # Published as insightfinderinc/bitnami-rabbitmq:4.3.5-debian-13-r0
+    # Published as insightfinderinc/bitnami-rabbitmq:4.3.5-debian-13-r1
     # (linux/amd64 + linux/arm64). Building from this directory produces the
     # same image; compose reuses the local one once it exists.
     build:
       context: .
-    image: bitnami/rabbitmq:4.3.5-debian-13-r0
+    image: bitnami/rabbitmq:4.3.5-debian-13-r1
     ports:
       - '4369:4369'
       - '5551:5551'

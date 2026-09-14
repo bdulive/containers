@@ -1,7 +1,9 @@
 # Redis Cluster 8.10 - Debian 13 (CVE-remediated variant)
 
 This is a hardened variant of `bitnami/redis-cluster:8.10.1-debian-12-r*` that clears all
-12 CVEs reported against that image. It reuses the published Bitnami `redis` and
+12 CVEs reported against that image. A follow-up third-party scan raised four further
+advisories; three are unfixed in Debian 13 and one does not apply to this image - see
+[Third-party rescan](#third-party-rescan-2026-09-14). It reuses the published Bitnami `redis` and
 `wait-for-port` components unchanged; only the base OS and the build-time HTTP client
 are different.
 
@@ -45,19 +47,87 @@ CVE-2026-75803 (C), CVE-2026-63072, CVE-2026-63076, CVE-2026-54874
 CVE-2026-12087 (C), CVE-2026-13221 (C), CVE-2026-57433 (C), CVE-2026-7017,
 CVE-2026-48959, CVE-2026-48961, CVE-2026-48962, CVE-2026-57432
 
+## Third-party rescan, 2026-09-14
+
+A follow-up third-party scan reported four findings against this variant. All four are
+still reported by grype and Trivy against the current build, and **no rebuild removes
+them**. Three are genuinely unfixed in Debian 13; one does not apply to this image at
+all.
+
+| CVE | Package | Installed | Disposition |
+| --- | --- | --- | --- |
+| CVE-2026-54369 | `libacl1` | `2.3.2-2+b1` | **Affected, no fix available.** Fixed upstream in acl 2.4.0, which Debian has not backported to trixie. |
+| CVE-2026-54370 | `libacl1` | `2.3.2-2+b1` | **Affected, no fix available**, same package. The TOCTOU race is in the `getfacl`/`setfacl`/`chacl` utilities, which ship in the `acl` binary package - not installed here. |
+| CVE-2026-54371 | `libattr1` | `1:2.5.2-3` | **Affected, no fix available.** Fixed upstream in attr 2.6.0, not backported. The affected `getfattr`/`setfattr` utilities ship in the `attr` package - not installed here. |
+| CVE-2026-85091 | `zlib1g` | `1:1.3.dfsg+really1.3.1-1+b1` | **Not affected - vulnerable code not present.** See below. |
+
+### Why no rebuild clears them
+
+Debian declined to backport the acl and attr fixes to trixie: acl 2.4.0 changes the ABI
+and attr 2.6.0 rewrites `walk_tree`, so both are deferred to a stable point release and
+marked `no-dsa` / "minor issue". Debian's trixie security feed therefore carries **no
+fixed version** for either source package, and a distro-matching scanner reports
+`versionConstraint: "none (unknown)"` - it flags the package at *any* version.
+
+That is what `wont-fix` in the scanner output means here: Debian has decided not to ship
+a security update for trixie, not that the flaw is unfixable. `not-fixed` on the zlib row
+means something different - no fix exists anywhere yet, sid included.
+
+Removing the packages was prototyped and rejected. `libacl1` and `libattr1` are
+dependencies of `coreutils`, `tar`, `sed` and `passwd`, so removal means replacing the
+GNU userland: busybox does it but brings 14 advisories of its own (8 HIGH), and toybox -
+which brings none - has no `tr` or `dd`, which the Bitnami scripts use on live paths.
+Patching around that means editing `prebuildfs/` and `rootfs/`, the files rebased against
+upstream on every Bitnami release, which is the one kind of divergence this variant
+exists to avoid. Measurements and traps are in [CLAUDE.md](../../CLAUDE.md).
+
+**These rows clear themselves** when the Debian trixie point release ships acl 2.4.0 and
+attr 2.6.0. No action is needed here; a rebuild after that date picks them up through the
+existing `apt-get upgrade` step.
+
+### CVE-2026-85091 (zlib): not affected
+
+The advisory covers upstream zlib **1.3.1.2 through 1.3.2**. Debian 13 ships upstream
+**1.3.1**, below that floor. Verified three ways:
+
+- `zlib1g 1:1.3.dfsg+really1.3.1-1+b1`; the Debian source package declares
+  `ZLIB_VERSION "1.3.1"` / `ZLIB_VERNUM 0x1310`, and the shipped `libz.so.1` self-reports
+  `1.3.1`.
+- `gz_vacate()`, the function containing the heap overflow, does not exist anywhere in
+  that source tree. It appears first in upstream `v1.3.1.2` (0 occurrences in
+  `v1.3.1/gzwrite.c`, 5 in `v1.3.1.2/gzwrite.c`).
+- Debian applies no patch that introduces it - the trixie patch series is empty.
+
+There is also nothing to upgrade to: Debian marks sid (`really1.3.2`) vulnerable as well,
+and GHSA-g5fp-32jq-cfw2 lists no patched version.
+
+### Scanner severities differ
+
+Both scanners report all four; a `--severity CRITICAL,HIGH` Trivy run hides three of them.
+
+| CVE | grype | Trivy |
+| --- | --- | --- |
+| CVE-2026-54369 | High, `wont-fix` | HIGH, `affected` |
+| CVE-2026-54370 | High, `wont-fix` | MEDIUM, `affected` |
+| CVE-2026-54371 | Medium, `wont-fix` | MEDIUM, `affected` |
+| CVE-2026-85091 | High, `not-fixed` | MEDIUM, `affected` |
+
+Neither offers a `FixedVersion` for any of them.
+
 ## Build
 
-This variant is published as a multi-architecture image (`linux/amd64`,
-`linux/arm64`):
+`-r0` is published as a multi-architecture image (`linux/amd64`, `linux/arm64`).
+`-r1` - a rebuild on the current Debian 13 package set - is built and verified on both
+architectures but **not yet pushed**:
 
 ```console
-docker pull insightfinderinc/bitnami-redis-cluster:8.10.1-debian-13-r0
+docker pull insightfinderinc/bitnami-redis-cluster:8.10.1-debian-13-r0   # published
 ```
 
 To build it yourself instead:
 
 ```console
-docker build -t bitnami/redis-cluster:8.10.1-debian-13-r0 .
+docker build -t bitnami/redis-cluster:8.10.1-debian-13-r1 .
 ```
 
 ## Verify
@@ -65,10 +135,12 @@ docker build -t bitnami/redis-cluster:8.10.1-debian-13-r0 .
 Use **grype** as the primary scanner. Its database carries all 12 CVEs from the scan
 report; Trivy's carries only 4 - see [Scanner coverage](#scanner-coverage). Both
 scanners need the *exported rootfs*: Docker 29 writes an OCI layout that Trivy rejects
-when reading the daemon image directly (`archive/tar: invalid tar header`).
+when reading the daemon image directly (`archive/tar: invalid tar header`) - and so
+does grype, which reports the same failure as `docker: failed to read layer=...`. A
+pushed registry reference scans directly with either tool.
 
 ```console
-docker create --name probe bitnami/redis-cluster:8.10.1-debian-13-r0
+docker create --name probe bitnami/redis-cluster:8.10.1-debian-13-r1
 mkdir fs && docker export probe | tar -x -C fs && docker rm -f probe
 
 grype db update
@@ -83,18 +155,18 @@ Per-package checks:
 
 ```console
 # OpenSSL: the Debian changelog names the four CVEs it fixes
-docker run --rm --entrypoint bash bitnami/redis-cluster:8.10.1-debian-13-r0 -c \
+docker run --rm --entrypoint bash bitnami/redis-cluster:8.10.1-debian-13-r1 -c \
   'dpkg-query -W | grep -i ssl
    zcat /usr/share/doc/openssl/changelog.Debian.gz |
      grep -oE "CVE-2026-(63072|63076|54874|75803)" | sort -u'
 
 # perl: gone, not merely upgraded
-docker run --rm --entrypoint bash bitnami/redis-cluster:8.10.1-debian-13-r0 -c \
+docker run --rm --entrypoint bash bitnami/redis-cluster:8.10.1-debian-13-r1 -c \
   'dpkg-query -W | grep -E "^(perl|libperl)" || echo "no perl packages"
    command -v perl || echo "no perl binary"'
 
 # redis binaries resolve against Debian 13 libraries
-docker run --rm --entrypoint bash bitnami/redis-cluster:8.10.1-debian-13-r0 -c \
+docker run --rm --entrypoint bash bitnami/redis-cluster:8.10.1-debian-13-r1 -c \
   'ldd /opt/bitnami/redis/bin/redis-server; redis-server --version'
 
 # a real 6-node cluster forms and serves traffic
@@ -107,32 +179,43 @@ docker compose -p rcverify down -v
 
 ## Verification results
 
-grype 0.118.0 and Trivy 0.74.0, databases as of 2026-09-09. Both `linux/amd64` and
-`linux/arm64` were built and scanned, and are identical on every row of this table
-(145 grype findings, 2 CRITICAL, 0 fixable, 0 of the 12).
+grype 0.118.0 and Trivy 0.74.0, rebuilt and rescanned 2026-09-14. Both `linux/amd64`
+and `linux/arm64` were built and scanned and are identical on every row of this table.
 
 The grype total dropped from 156 to 145 when `uninstall_packages wget` was added:
 the seven `wget` advisories and their gnutls/idn2/nettle/psl dependants leave with
 the package.
 
-| | `8.10.1-debian-12-r0` (baseline) | `8.10.1-debian-13-r0` |
+| | `8.10.1-debian-12-r0` (baseline) | `8.10.1-debian-13-r1` |
 | --- | --- | --- |
-| grype, all severities | 282 findings, 24 CRITICAL | **145 findings, 2 CRITICAL** |
+| grype, all severities | 282 findings, 24 CRITICAL | **139 findings, 0 CRITICAL** |
 | grype, findings with an available fix | 0 | **0** |
-| Trivy, CRITICAL+HIGH | 80 findings, 13 CRITICAL | **47 findings, 0 CRITICAL** |
+| Trivy, all severities | - | **145 findings, 0 CRITICAL, 42 HIGH** |
 | Trivy, findings with a `FixedVersion` | 0 | **0** |
 | CVEs from the scan report still present | **12 of 12** | **0 of 12** |
 
-The two residual grype CRITICALs are `CVE-2026-5450` in `libc6`/`libc-bin`, marked
-`wont-fix` by Debian. It is present in the `debian-12` baseline too and is not part of
-this scan report.
+**The image now carries no CRITICAL findings at all.** The two that `-r0` had were
+`CVE-2026-5450` in `libc6`/`libc-bin`, which Debian has since fixed - the rebuild picked
+up `libc6 2.41-12+deb13u4` through the existing `apt-get upgrade` step, and grype no
+longer reports that CVE - the ordinary payoff of rebuilding on the current package set.
+
+Trivy's figure is quoted at all severities here rather than `CRITICAL,HIGH`, because
+three of the four CVEs in the [third-party rescan](#third-party-rescan-2026-09-14) are
+`MEDIUM` to Trivy and a filtered run hides them.
 
 Functional check: a 6-node cluster from [`docker-compose.yml`](docker-compose.yml)
 reached `cluster_state:ok` with 3 masters, 3 replicas and all 16384 slots assigned;
 keys written through one node were read back through another via `-c` redirects, and
-`info replication` showed the replica online. Killing a master container promoted its
-replica and the cluster returned to `cluster_state:ok` in ~3s with every key still
-readable and writes accepted afterwards.
+`info replication` showed the replica online. Killing a master container is survived with no data
+loss: the cluster marked the node `fail` after ~22s (`cluster-node-timeout`), the replica
+was promoted ~4s later, full 16384-slot coverage returned ~2s after that, and all 10 test
+keys were readable through the promoted master with writes accepted afterwards.
+
+Measure that sequence in that order if you re-run it. Polling `cluster_state:ok` straight
+after the kill reads the *pre-failure* view - the surviving nodes have not noticed yet -
+and reads taken in that window return empty for keys on the dead master, which looks
+exactly like data loss and is not. Wait for `fail` in `cluster nodes`, then for the
+replica's `role` to become `master`, then for `cluster_slots_ok:16384`.
 
 ### Scanner coverage
 

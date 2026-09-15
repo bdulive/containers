@@ -5,6 +5,16 @@ Fork of `bitnami/containers`. Only a handful of images are hand-maintained here;
 
 `origin` is this fork, `upstream` is `bitnami/containers`.
 
+## Working rules
+
+**Never commit automatically. The user reviews every change before it is committed.**
+Make the edits, report what changed, and stop there — `git commit` happens only when the
+user asks for it in that turn. Asking for a commit once does not authorise the next one.
+
+The same applies to anything else that leaves this machine: pushing a branch, pushing an
+image to `insightfinderinc`, or publishing in any other form. Build and scan freely; ask
+before publishing.
+
 ## Directory index
 
 | Path | Role |

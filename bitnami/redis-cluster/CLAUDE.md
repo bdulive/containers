@@ -40,7 +40,7 @@ Facts worth not re-deriving:
   with `uninstall_packages wget` for the same reason: left installed, wget contributes
   seven advisories (three HIGH, none fixable) plus its gnutls/idn2/nettle/psl chain to
   an image whose whole point is CVE remediation. This is easy to lose when rebasing —
-  if the grype total jumps by ~10, check the wget purge is still there.
+  if the Trivy total jumps by ~10, check the wget purge is still there.
 - **The `openssl` CLI is not needed** — unlike rabbitmq, nothing hashes passwords with
   it. It comes in as a dependency of the base, not as an explicit install.
 - The 6-node `docker-compose.yml` is the real smoke test: node-5 carries
@@ -60,10 +60,10 @@ Work in this order; each step tells you whether the next is even needed.
 
    - **An upgrade does not necessarily clear the scan row, and that is not a build
      bug.** Distro matchers key on the suite: when Debian's trixie feed has no fixed
-     version, grype emits `versionConstraint: "none (unknown)"` and flags the package
-     at *any* version, `wont-fix`. Confirm with
-     `grype dir:fs -o json | jq '.matches[] | select(.vulnerability.id=="CVE-...")'`
-     before concluding an upgrade failed. When the constraint is "none", no version of
+     version, the package is flagged at *any* version with no `FixedVersion`. Confirm
+     with
+     `trivy rootfs --format json fs | jq '.Results[].Vulnerabilities[]? | select(.VulnerabilityID=="CVE-...")'`
+     before concluding an upgrade failed. An empty `FixedVersion` means no version of
      the package clears the row and the only honest close-out is a vendor response.
      The variant README's "Third-party rescan" section records the reasoning for the
      four advisories currently in that state.
@@ -92,7 +92,7 @@ in the next section is about replacing the GNU userland with applets, not about 
 The 6-node cluster bootstraps correctly on both arches, `REDIS_NODES` included.
 
 One caveat, and it is the reason this does not simply supersede the Debian variant:
-`grype --only-fixed` is **not** empty on the Wolfi image. Wolfi ships `zlib 1.3.2-r6`,
+`trivy --ignore-unfixed` is **not** empty on the Wolfi image. Wolfi ships `zlib 1.3.2-r6`,
 which is inside CVE-2026-85091's affected range (1.3.1.2-1.3.2) and has a *published fix
 identifier* (`1.3.3-r0`) that has not yet reached the apk repo - latest is `1.3.2-r7`. So
 Wolfi trades 138 findings with **zero fixable** for 3 findings with **two fixable** (the
@@ -112,7 +112,7 @@ Prototyped and rejected on 2026-09-14. Purging `coreutils`/`tar`/`sed`/`passwd`/
 reporting CVE-2026-54369/-54370/-54371 - that part works. The replacement userland is
 what kills it:
 
-| replacement | grype total / CRITICAL / HIGH | verdict |
+| replacement | scanner total / CRITICAL / HIGH (measured with grype, pre-2026-09-15) | verdict |
 | --- | --- | --- |
 | none (current `-r1`) | 139 / 0 / 44 | the three rows are reported |
 | busybox 1.37.0 | 140 / 0 / 50 | rows gone, but busybox adds **14 advisories of its own, 8 HIGH, all wont-fix** - a worse report than it fixes |
@@ -155,30 +155,32 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   -t insightfinderinc/bitnami-redis-cluster:8.10.1-debian-13-r1 --push .
 ```
 
-Both architectures should report identical grype totals; a divergence means an
+Both architectures should report identical Trivy totals; a divergence means an
 arch-specific package slipped in.
 
 Scan through the *exported filesystem*: Docker 29 writes an OCI layout that **every**
 scanner rejects when reading the daemon image directly (`archive/tar: invalid tar
-header` from grype, Trivy and Scout alike). Scanning a pushed registry reference works
-for all three; only the local daemon image needs the export.
+header`, or `unexpected EOF`). Scanning a pushed registry reference works; only the
+local daemon image needs the export.
 
 ```console
 docker create --name probe bitnami/redis-cluster:8.10.1-debian-13-r1
 mkdir fs && docker export probe | tar -x -C fs && docker rm -f probe
 
-grype db update && grype dir:fs                    # primary, all severities
-grype dir:fs --only-fixed                          # the pass condition: must be empty
-trivy rootfs --scanners vuln --severity CRITICAL,HIGH fs
+trivy rootfs --scanners vuln fs                    # all severities
+trivy rootfs --scanners vuln --ignore-unfixed fs   # the pass condition: must be empty
 ```
 
-**Use grype as the primary scanner.** For the 12 CVEs this variant was built to clear,
-grype's DB carries all 12 and Trivy's carries 4 — a clean Trivy run proves little on
-its own. Always run the same scan against the debian-12 baseline and compare; a
-before/after delta per CVE ID is the real evidence.
+**Use Trivy. grype is not installed on this machine** (decision of 2026-09-15). Be aware
+of what that costs: when this variant was built, grype's DB carried all 12 of the CVEs it
+targets and Trivy's carried 4, so a clean Trivy run is weaker evidence than the grype runs
+recorded in the variant READMEs. Compensate by always scanning the debian-12 baseline the
+same way and comparing — a before/after delta per CVE ID is the real evidence, and it stays
+valid even where absolute coverage is narrower.
 
-Treat a finding as actionable only if a fix exists — `FixedVersion` in Trivy, fix state
-`fixed` in grype. The pass condition is **zero fixable findings**, not a zero total:
+Treat a finding as actionable only if a fix exists — a non-empty `FixedVersion`, which is
+what `--ignore-unfixed` filters on. The pass condition is **zero fixable findings**, not a
+zero total:
 the residual findings here are all `wont-fix`/`not-fixed` in Debian 13, including
 `CVE-2026-5450` in glibc, which is CRITICAL and present in both variants.
 

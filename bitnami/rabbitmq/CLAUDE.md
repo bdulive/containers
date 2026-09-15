@@ -43,9 +43,9 @@ Work in this order; each step tells you whether the next is even needed.
 
    - **An upgrade does not necessarily clear the scan row, and that is not a build
      bug.** Distro matchers key on the suite: when Debian's trixie feed has no fixed
-     version, grype emits `versionConstraint: "none (unknown)"` and flags the package
-     at *any* version, `wont-fix`. Confirm with
-     `grype dir:fs -o json | jq '.matches[] | select(.vulnerability.id=="CVE-...")'`
+     version, the package is flagged at *any* version with no `FixedVersion`. Confirm
+     with
+     `trivy rootfs --format json fs | jq '.Results[].Vulnerabilities[]? | select(.VulnerabilityID=="CVE-...")'`
      before concluding an upgrade failed. When the constraint is "none", no version of
      the package clears the row and the only honest close-out is a vendor response.
      The variant README's "Third-party rescan" section records the reasoning for the
@@ -82,7 +82,7 @@ Prototyped and rejected on 2026-09-14. Purging `coreutils`/`tar`/`sed`/`passwd`/
 reporting CVE-2026-54369/-54370/-54371 - that part works. The replacement userland is
 what kills it:
 
-| replacement | grype total / CRITICAL / HIGH | verdict |
+| replacement | scanner total / CRITICAL / HIGH (measured with grype, pre-2026-09-15) | verdict |
 | --- | --- | --- |
 | none (current `-r1`) | 139 / 0 / 44 | the three rows are reported |
 | busybox 1.37.0 | 140 / 0 / 50 | rows gone, but busybox adds **14 advisories of its own, 8 HIGH, all wont-fix** - a worse report than it fixes |
@@ -133,31 +133,34 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 Both architecture legs come from the buildx cache if you built them with
 `--load` first, so the push itself is layer upload only (~12 min for this image).
 
-Scan. **No scanner can read the daemon's image directly here** - grype, Trivy and
+Scan. **No scanner can read the daemon's image directly here** - Trivy and
 Docker Scout all fail on Docker 29's OCI layout with `archive/tar: invalid tar
-header` (grype reports it as `docker: failed to read layer=...`). This is a Docker
-29 limitation, not a grype one; scanning a pushed registry reference works fine for
+header`, or `unexpected EOF`. This is a Docker
+29 limitation, not a scanner one; scanning a pushed registry reference works fine for
 all three. Locally, go through the exported filesystem:
 
 ```console
 docker create --name probe bitnami-rabbitmq:4.3.5-debian-13-r1
 mkdir fs && docker export probe | tar -x -C fs && docker rm -f probe
 
-grype db update && grype dir:fs                    # primary, all severities
-grype dir:fs --only-fixed                          # the pass condition: must be empty
+trivy rootfs --scanners vuln fs                    # all severities
+trivy rootfs --scanners vuln --ignore-unfixed fs   # the pass condition: must be empty
 trivy rootfs --scanners vuln --severity CRITICAL,HIGH fs
 docker scout cves --only-severity critical,high fs://fs
 ```
 
-**Use grype as the primary scanner.** DB coverage of the 26 CVEs this variant was
-built to clear differs wildly: grype 23/26, Docker Scout 9/26, Trivy 4/26. A clean
-Trivy run proves almost nothing here; a grype before/after against the debian-12
+**Use Trivy. grype is not installed on this machine** (decision of 2026-09-15). Know what
+that costs here: DB coverage of the 26 CVEs this variant was built to clear was measured as
+grype 23/26, Docker Scout 9/26, Trivy 4/26. A clean Trivy run therefore proves much less on
+this image than the recorded grype runs did. Compensate with a before/after against the
+debian-12
 baseline is the real evidence. Some CVEs (the three `libssh2` ones) are in no
 database yet and can only be verified by the package being absent - always pair a
 scan with the per-package checks in the variant's README.
 
 Treat a finding as actionable only if a fix exists - `FixedVersion` in Trivy,
-fix state `fixed` in grype. The pass condition is **zero fixable findings**, not a
+a non-empty `FixedVersion`, which is what `--ignore-unfixed` filters on. The pass
+condition is **zero fixable findings**, not a
 zero total: the residual findings in this image are all `wont-fix`/`not-fixed`
 in Debian 13.
 

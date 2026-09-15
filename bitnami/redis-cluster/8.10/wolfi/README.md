@@ -25,17 +25,18 @@ acl/attr findings are genuinely absent, not waived by a VEX statement.
 
 Identical on `linux/amd64` and `linux/arm64`.
 
-grype is the primary scanner for this image (see the directory `CLAUDE.md`: its DB carries
-advisories Trivy's does not), scanned through the exported filesystem:
+Scanned with Trivy through the exported filesystem (`docker export` + `trivy rootfs`;
+Docker 29's OCI layout cannot be read from the daemon directly):
 
-| variant | grype total | fixable | of the 4 customer CVEs |
+| variant | Trivy total | fixable | of the 4 customer CVEs |
 |---|---|---|---|
-| `debian-13` r1 (published) | 138 | **0** | all 4 |
-| **`wolfi`** | **3** | **2** | only the zlib one |
+| `debian-13` r1 (published) | 145 | **0** | all 4 |
+| **`wolfi`** | **1** | **1** | only the zlib one |
 
 ### The one way this does not yet beat the Debian variant
 
-**`grype --only-fixed` is not empty here**, so the repo's stated pass condition is not met.
+**`trivy --ignore-unfixed` is not empty here**, so the repo's stated pass condition is not
+met.
 Wolfi ships `zlib 1.3.2-r6`, which sits inside CVE-2026-85091's affected range
 (1.3.1.2–1.3.2) and has a published fix identifier, `1.3.3-r0`, that has **not yet reached
 the apk repo** — the newest available is `1.3.2-r7`. Debian trixie's zlib is upstream 1.3.1,
@@ -49,8 +50,9 @@ clean `--only-fixed`.
 **Do not pin zlib backwards to dodge it.** `1.3.1.2-r3` is still inside the affected range
 *and* adds `CVE-2026-27171`.
 
-The third grype finding is `CVE-2025-49112` (Low, no fix) matched against the `redis`
-binary itself, which is the same Bitnami component the Debian variant ships.
+A scan of this image taken before the move to Trivy-only also surfaced `CVE-2025-49112`
+(Low, no fix) against the `redis` binary itself — the same Bitnami component the Debian
+variant ships, so it is not introduced by this base.
 
 ## Build
 

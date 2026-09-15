@@ -36,9 +36,14 @@ Identical on `linux/amd64` and `linux/arm64`. The single remaining finding is
 `CVE-2026-85091` on `zlib 1.3.2-r6`. Chainguard's feed already names the fix (`1.3.3-r0`);
 it is not yet published to the repo, so it clears itself on a later rebuild.
 
-grype agrees on both architectures but reports the same issue twice - once as
-`CVE-2026-85091` and once as `GHSA-g5fp-32jq-cfw2` (same package, same fix version) - and
+grype agrees on both architectures but reports the same issue twice — once as
+`CVE-2026-85091` and once as `GHSA-g5fp-32jq-cfw2` (same package, same fix version) — and
 rates it High where Trivy rates it Medium. One underlying issue, not two.
+
+Note that this means **`grype --only-fixed` is not empty**: the fix identifier `1.3.3-r0`
+is published but has not reached the apk repo yet (newest available is `1.3.2-r7`). Debian
+trixie's zlib is upstream 1.3.1, *below* the affected range, so the same advisory reads as
+unfixable-but-inapplicable there and fixable-and-real here. Rebuild once `1.3.3-r0` lands.
 
 **Do not pin zlib backwards to dodge it.** `1.3.1.2-r3` is still inside the CVE's affected
 range (1.3.1.2–1.3.2) *and* adds `CVE-2026-27171`. Take 1.3.2 and rebuild when 1.3.3 lands.

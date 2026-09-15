@@ -1,0 +1,28 @@
+#!/bin/sh
+# Copyright Broadcom, Inc. All Rights Reserved.
+# SPDX-License-Identifier: APACHE-2.0
+#
+# Wolfi (apk) equivalent of the Debian/apt helper shipped with the minideb
+# variants. Same contract: install the named packages, fail the build if any
+# of them cannot be installed, leave no package cache behind.
+set -eu
+n=0
+max=2
+until [ $n -gt $max ]; do
+    set +e
+    (
+        apk update -q &&
+        apk add --no-cache "$@"
+    )
+    CODE=$?
+    set -e
+    if [ $CODE -eq 0 ]; then
+        break
+    fi
+    if [ $n -eq $max ]; then
+        exit $CODE
+    fi
+    echo "apk failed, retrying"
+    n=$(($n + 1))
+done
+rm -rf /var/cache/apk/*

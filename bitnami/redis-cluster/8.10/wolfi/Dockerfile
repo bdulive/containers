@@ -45,7 +45,7 @@ RUN --mount=type=secret,id=downloads_url,env=SECRET_DOWNLOADS_URL \
     DOWNLOADS_URL=${SECRET_DOWNLOADS_URL:-${DOWNLOADS_URL}} ; \
     mkdir -p /tmp/cache /rootfs-app ; cd /tmp/cache ; \
     for COMPONENT in \
-      "wait-for-port-1.0.11-1-linux-${OS_ARCH}-debian-12" \
+      "wait-for-port-1.0.11-3-linux-${OS_ARCH}-debian-12" \
       "redis-8.10.1-0-linux-${OS_ARCH}-debian-12" ; \
     do \
       wget --no-verbose --tries=3 "${DOWNLOADS_URL}/${COMPONENT}.tar.gz" ; \
@@ -64,7 +64,7 @@ ARG WOLFI_BASE
 ARG TARGETARCH
 
 LABEL org.opencontainers.image.base.name="${WOLFI_BASE}" \
-      org.opencontainers.image.created="2026-09-17T00:00:00Z" \
+      org.opencontainers.image.created="2026-09-17T03:45:00Z" \
       org.opencontainers.image.description="Application packaged by Broadcom, Inc." \
       org.opencontainers.image.documentation="https://github.com/bitnami/containers/tree/main/bitnami/redis-cluster/README.md" \
       org.opencontainers.image.source="https://github.com/bitnami/containers/tree/main/bitnami/redis-cluster" \

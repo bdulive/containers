@@ -3,12 +3,12 @@
 
 services:
   rabbitmq:
-    # Published as insightfinderinc/bitnami-rabbitmq:4.3.5-wolfi-r1
-    # (linux/amd64 + linux/arm64). Building from this directory produces the
-    # same image; compose reuses the local one once it exists.
+    # Built and verified locally as
+    # insightfinderinc/bitnami-rabbitmq:4.3.6-wolfi-r0; not yet pushed.
+    # Building from this directory produces it; compose reuses the local one.
     build:
       context: .
-    image: insightfinderinc/bitnami-rabbitmq:4.3.5-wolfi-r1
+    image: insightfinderinc/bitnami-rabbitmq:4.3.6-wolfi-r0
     ports:
       - '4369:4369'
       - '5551:5551'

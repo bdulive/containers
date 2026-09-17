@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: APACHE-2.0
 
 # ---------------------------------------------------------------------------
-# RabbitMQ 4.3.5 on Chainguard Wolfi.
+# RabbitMQ 4.3.6 on Chainguard Wolfi.
 #
 # Variant of the upstream ../debian-12 image that replaces the minideb base
 # with cgr.dev/chainguard/wolfi-base. Two things fall out of that swap:
@@ -18,7 +18,7 @@
 #      for - so no Erlang source build is needed.
 #
 # Build:
-#   docker build -t bitnami-rabbitmq:4.3.5-wolfi-r1 .
+#   docker build -t bitnami-rabbitmq:4.3.6-wolfi-r0 .
 # ---------------------------------------------------------------------------
 
 ARG WOLFI_BASE="cgr.dev/chainguard/wolfi-base:latest"
@@ -44,7 +44,7 @@ RUN --mount=type=secret,id=downloads_url,env=SECRET_DOWNLOADS_URL \
     set -eu ; \
     DOWNLOADS_URL=${SECRET_DOWNLOADS_URL:-${DOWNLOADS_URL}} ; \
     mkdir -p /tmp/cache /rootfs-app ; cd /tmp/cache ; \
-    COMPONENT="rabbitmq-4.3.5-0-linux-${OS_ARCH}-debian-12" ; \
+    COMPONENT="rabbitmq-4.3.6-0-linux-${OS_ARCH}-debian-12" ; \
     wget --quiet --tries=3 "${DOWNLOADS_URL}/${COMPONENT}.tar.gz" ; \
     sha256sum -c "/opt/bitnami/checksums/${COMPONENT}.tar.gz.sha256" ; \
     tar -zxf "${COMPONENT}.tar.gz" -C /rootfs-app --strip-components=2 --no-same-owner ; \
@@ -61,13 +61,13 @@ ARG TARGETARCH
 ARG OTP_VERSION="27.3.4.17"
 
 LABEL org.opencontainers.image.base.name="${WOLFI_BASE}" \
-      org.opencontainers.image.created="2026-09-17T00:00:00Z" \
+      org.opencontainers.image.created="2026-09-17T03:45:00Z" \
       org.opencontainers.image.description="Application packaged by Broadcom, Inc." \
       org.opencontainers.image.documentation="https://github.com/bitnami/containers/tree/main/bitnami/rabbitmq/README.md" \
       org.opencontainers.image.source="https://github.com/bitnami/containers/tree/main/bitnami/rabbitmq" \
       org.opencontainers.image.title="rabbitmq" \
       org.opencontainers.image.vendor="Broadcom, Inc." \
-      org.opencontainers.image.version="4.3.5"
+      org.opencontainers.image.version="4.3.6"
 
 ENV HOME="/opt/bitnami/rabbitmq/.rabbitmq" \
     OS_ARCH="${TARGETARCH:-amd64}" \
@@ -91,6 +91,11 @@ SHELL ["/bin/sh", "-o", "errexit", "-c"]
 #   glibc-locale-en       - en_US.UTF-8; no locale-gen (and no perl) needed
 #   ncurses               - required by the Erlang runtime
 #   wget                  - plugin download and HTTP readiness checks
+#   openssl               - the CLI, not just the library: rabbitmq_hash_password
+#                           shells out to "openssl dgst -sha512" and
+#                           "openssl base64" when RABBITMQ_LOAD_DEFINITIONS=yes
+#                           creates the admin user. erlang-27 pulls libssl but
+#                           NOT the binary, so this must be explicit.
 #   erlang-27             - 27.3.4.17, the OTP patch release several advisories
 #                           require and Bitnami publishes no component for
 RUN apk update && \
@@ -107,6 +112,7 @@ RUN apk update && \
       glibc-locale-en \
       ncurses \
       wget \
+      openssl \
       ca-certificates-bundle \
       erlang-27 && \
     rm -rf /var/cache/apk/*
@@ -119,6 +125,12 @@ RUN installed="$(apk info -v 2>/dev/null | grep '^erlang-27-' | head -1)" && \
       *) echo "expected erlang-27 ${OTP_VERSION}, got '${installed}'" >&2 ; exit 1 ;; \
     esac && \
     erl -noshell -eval 'io:format("erts ~s / OTP ~s~n",[erlang:system_info(version),erlang:system_info(otp_release)]),halt().'
+
+# rabbitmq_hash_password shells out to the openssl CLI; without it, user
+# creation under RABBITMQ_LOAD_DEFINITIONS=yes fails at first boot with
+# "openssl: command not found" and an empty --pre-hashed-password. Assert the
+# binary, not the library, so a package-list change cannot silently drop it.
+RUN command -v openssl && printf 'x' | openssl dgst -sha512 -binary | wc -c
 
 # The Bitnami layout expects Erlang under /opt/bitnami/erlang; Wolfi installs
 # it to /usr/lib/erlang. Symlink rather than copy so apk keeps owning the
@@ -143,9 +155,9 @@ RUN find / -perm /6000 -type f -exec chmod a-s {} \; || true
 COPY rootfs /
 RUN /opt/bitnami/scripts/rabbitmq/postunpack.sh
 
-ENV APP_VERSION="4.3.5" \
+ENV APP_VERSION="4.3.6" \
     BITNAMI_APP_NAME="rabbitmq" \
-    IMAGE_REVISION="1" \
+    IMAGE_REVISION="0" \
     LANG="en_US.UTF-8" \
     LANGUAGE="en_US:en"
 

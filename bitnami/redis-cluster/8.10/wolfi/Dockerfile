@@ -17,7 +17,7 @@
 #
 # Build:
 #   docker build --platform linux/amd64,linux/arm64 \
-#     -t bitnami-redis-cluster:8.10.1-wolfi-r0 --load .
+#     -t bitnami-redis-cluster:8.10.1-wolfi-r1 --load .
 # ---------------------------------------------------------------------------
 
 ARG WOLFI_BASE="cgr.dev/chainguard/wolfi-base:latest"

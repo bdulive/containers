@@ -18,7 +18,7 @@
 #      for - so no Erlang source build is needed.
 #
 # Build:
-#   docker build -t bitnami-rabbitmq:4.3.5-wolfi-r0 .
+#   docker build -t bitnami-rabbitmq:4.3.5-wolfi-r1 .
 # ---------------------------------------------------------------------------
 
 ARG WOLFI_BASE="cgr.dev/chainguard/wolfi-base:latest"

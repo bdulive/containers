@@ -8,7 +8,7 @@ services:
     # same image; compose reuses the local one once it exists.
     build:
       context: .
-    image: insightfinderinc/bitnami-rabbitmq:4.3.5-wolfi-r0
+    image: insightfinderinc/bitnami-rabbitmq:4.3.5-wolfi-r1
     ports:
       - '4369:4369'
       - '5551:5551'

@@ -4,8 +4,8 @@
 # ---------------------------------------------------------------------------
 # RabbitMQ 4.3.5 on Chainguard Wolfi.
 #
-# Variant of ../debian-13 that replaces docker.io/bitnami/minideb:trixie with
-# cgr.dev/chainguard/wolfi-base. Two things fall out of that swap:
+# Variant of the upstream ../debian-12 image that replaces the minideb base
+# with cgr.dev/chainguard/wolfi-base. Two things fall out of that swap:
 #
 #   1. Wolfi packages the FIXED acl 2.4.0 and attr 2.6.0 releases, so
 #      CVE-2026-54369, CVE-2026-54370 and CVE-2026-54371 are genuinely absent
@@ -14,8 +14,8 @@
 #      Docker Hardened Images rebuild those same unfixed sources.
 #
 #   2. Wolfi packages erlang-27 at exactly 27.3.4.17 - the OTP patch release
-#      the minideb variant has to compile from source - so the whole
-#      erlang-builder stage disappears.
+#      several advisories require and Bitnami does not publish a component
+#      for - so no Erlang source build is needed.
 #
 # Build:
 #   docker build -t bitnami-rabbitmq:4.3.5-wolfi-r0 .
@@ -91,8 +91,8 @@ SHELL ["/bin/sh", "-o", "errexit", "-c"]
 #   glibc-locale-en       - en_US.UTF-8; no locale-gen (and no perl) needed
 #   ncurses               - required by the Erlang runtime
 #   wget                  - plugin download and HTTP readiness checks
-#   erlang-27             - 27.3.4.17, the same OTP patch release the minideb
-#                           variant compiles from source
+#   erlang-27             - 27.3.4.17, the OTP patch release several advisories
+#                           require and Bitnami publishes no component for
 RUN apk update && \
     apk upgrade --no-cache && \
     apk add --no-cache \

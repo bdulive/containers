@@ -1,7 +1,9 @@
 # RabbitMQ 4.3.5 on Chainguard Wolfi
 
-Variant of [`../debian-13`](../debian-13) that replaces
-`docker.io/bitnami/minideb:trixie` with `cgr.dev/chainguard/wolfi-base`.
+Variant of the upstream [`../debian-12`](../debian-12) image that replaces the
+`docker.io/bitnami/minideb` base with `cgr.dev/chainguard/wolfi-base`. This is the only
+hand-maintained variant of this image; a `debian-13`/minideb:trixie variant existed until
+2026-09-17 and was removed once Wolfi proved strictly better on every finding.
 
 Published as `insightfinderinc/bitnami-rabbitmq:4.3.5-wolfi-r1` (multi-arch, amd64+arm64),
 index digest `sha256:6e67d3530bd937e82681d6b0bfea79696d173951499ea12a7dbe4b75817c2317`.
@@ -9,7 +11,7 @@ index digest `sha256:6e67d3530bd937e82681d6b0bfea79696d173951499ea12a7dbe4b75817
 
 ## Why this exists
 
-A customer scan of `4.3.5-debian-13-r0` reported four OS-package findings:
+A customer scan of the earlier Debian-based build reported four OS-package findings:
 `CVE-2026-54369` / `CVE-2026-54370` (acl), `CVE-2026-54371` (attr) and `CVE-2026-85091`
 (zlib). Neither Debian trixie nor Docker Hardened Images can clear the first three — on any
 Debian base `libacl1` arrives via `coreutils`, `passwd`, `sed` and `tar`, and trixie is
@@ -21,8 +23,9 @@ than patching them, so a scanner that does not consume that VEX still reports al
 Wolfi packages the **fixed** releases — `libacl1 2.4.0` and `libattr1 2.6.0` — so the three
 acl/attr findings are genuinely absent, not waived.
 
-It also packages `erlang-27` at exactly **27.3.4.17**, the OTP patch release the minideb
-variant compiles from source, so the whole `erlang-builder` stage disappears. The Dockerfile
+It also packages `erlang-27` at exactly **27.3.4.17** — the OTP patch release several
+advisories require, which Bitnami publishes no component for and the retired minideb variant
+had to compile from source — so no Erlang source build is needed. The Dockerfile
 asserts that version at build time: a silent downgrade would reintroduce fixed OTP
 advisories.
 
@@ -30,7 +33,7 @@ advisories.
 
 | variant | CRITICAL | HIGH | MEDIUM | LOW | total | of the 4 customer CVEs |
 |---|---|---|---|---|---|---|
-| `debian-13` r1 (published) | 0 | 44 | 72 | 72 | 189 | all 4 |
+| `debian-13` r1 (retired 2026-09-17) | 0 | 44 | 72 | 72 | 189 | all 4 |
 | `dhi.io/debian-base` rebase (tested, not kept) | 0 | 13 | 35 | 34 | 82 | all 4 |
 | **`wolfi`** | **0** | **0** | **1** | **0** | **1** | only the zlib one |
 
@@ -76,7 +79,7 @@ docker build --platform linux/amd64,linux/arm64 \
 `TARGETARCH` selects the matching Bitnami component tarball, and each is verified against
 the per-arch checksum already in `prebuildfs/opt/bitnami/checksums/`.
 
-## How it differs from the minideb variant
+## How it differs from a minideb variant
 
 - **No Erlang build stage.** `apk add erlang-27` gives 27.3.4.17 directly. Erlang lands in
   `/usr/lib/erlang` and is symlinked to `/opt/bitnami/erlang` so the Bitnami `PATH`
@@ -86,7 +89,7 @@ the per-arch checksum already in `prebuildfs/opt/bitnami/checksums/`.
   Bitnami script library relies on GNU behaviour in `sed`, `grep` and `awk`. On Wolfi that
   costs nothing in CVE terms, because `coreutils` pulls the *patched* acl/attr. Staying on
   bare busybox avoids acl/attr entirely if you ever want the stricter footprint.
-- **No perl purge.** The minideb variant has to force-purge perl as its final dpkg
+- **No perl purge.** A minideb variant has to force-purge perl as its final dpkg
   operation because `locale-gen` needs it. Wolfi ships `glibc-locale-en`, so `en_US.UTF-8`
   works with no perl anywhere in the image.
 - **`getent` comes from `posix-libc-utils-bin`** — used by `libnet.sh` and `libos.sh`.
@@ -96,7 +99,7 @@ the per-arch checksum already in `prebuildfs/opt/bitnami/checksums/`.
   `apk` instead of `apt`, keeping the same contract.
 - **uid 1001 is created explicitly.** `wolfi-base` only ships `nonroot` (65532).
 
-Image is 513MB against 708MB for `4.3.5-debian-13-r1`.
+Image is 513MB against 708MB for the retired `4.3.5-debian-13-r1`.
 
 ## Verification
 

@@ -19,38 +19,50 @@ before publishing.
 
 | Path | Role |
 | --- | --- |
-| `bitnami/rabbitmq/` | Hand-maintained. CVE-remediated variants of 4.3.5. See `bitnami/rabbitmq/CLAUDE.md`. |
-| `bitnami/redis-cluster/` | Hand-maintained. CVE-remediated variants of 8.10.1. See `bitnami/redis-cluster/CLAUDE.md`. |
+| `bitnami/rabbitmq/` | Hand-maintained. CVE-remediated Wolfi variant of 4.3.5 in `4.3/wolfi/`. See `bitnami/rabbitmq/CLAUDE.md`. |
+| `bitnami/redis-cluster/` | Hand-maintained. CVE-remediated Wolfi variant of 8.10.1 in `8.10/wolfi/`. See `bitnami/redis-cluster/CLAUDE.md`. |
 | `bitnami/<everything else>/` | **Upstream-generated. Do not hand-edit.** Overwritten by the next `[bitnami/<name>] Release ...` commit pulled from `upstream`. |
 | `README.md`, `CONTRIBUTING.md`, `TESTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md` | Upstream. Leave alone. |
 
 Within a hand-maintained image, each variant is its own directory
 (`<version>/<flavour>/`) with its own `Dockerfile`, `README.md`, `prebuildfs/` and
 `rootfs/`. The per-image `CLAUDE.md` says which of those are generated and which are ours.
+Everything outside a `wolfi/` directory — including each image's top-level `README.md` and
+`docker-compose.yml` — is left byte-identical to upstream so the fork stays syncable.
 
 ## Adding a new maintained image
 
-Give it its own `bitnami/<name>/CLAUDE.md` covering local file roles, the component set,
-image-specific remediation history, and scoped build/test commands. Add a row to the index
-above and nothing more — **this file is a table of contents; image-specific detail lives in
-the nested file, not here.**
+Build it as a `<version>/wolfi/` variant beside the upstream `debian-12/` one, and leave
+every other path in that image untouched. Give it its own `bitnami/<name>/CLAUDE.md`
+covering local file roles, the component set, image-specific remediation history, and
+scoped build/test commands. Add a row to the index above and nothing more — **this file is
+a table of contents; image-specific detail lives in the nested file, not here.**
 
 ## Base image flavours
 
-Three flavours appear across the maintained images. The choice is a CVE-surface decision,
+Two flavours appear across the maintained images. The choice is a CVE-surface decision,
 not a packaging preference:
 
 | flavour dir | base | why |
 | --- | --- | --- |
-| `debian-12/` | `bitnami/minideb:bookworm` | Upstream-generated. |
-| `debian-13/` | `bitnami/minideb:trixie` | Hand-maintained Debian variant. Most remediation lives in the Dockerfile. |
-| `wolfi/` | `cgr.dev/chainguard/wolfi-base` | Clears advisories no Debian base can — Wolfi packages fixed releases Debian has only in unstable. |
+| `debian-12/` | `bitnami/minideb:bookworm` | Upstream-generated. Never hand-edited. |
+| `wolfi/` | `cgr.dev/chainguard/wolfi-base` | The one hand-maintained flavour. Clears advisories no Debian base can — Wolfi packages fixed releases Debian has only in unstable. |
+
+**Wolfi is the only flavour we remediate in. Any future CVE fix — for these images or a
+newly maintained one — goes into a `wolfi/` variant; do not add a Debian-based variant to
+carry it.** A `debian-13/` (`minideb:trixie`) variant of rabbitmq and redis-cluster existed
+until 2026-09-17 and was deleted: it could never clear the acl/attr advisories below, it
+needed an Erlang source build and a `perl` force-purge that Wolfi makes unnecessary, and it
+scanned far worse (rabbitmq 189 findings vs 1; redis-cluster 145 vs 1). Keeping the fork to
+`debian-12/` plus `wolfi/` also keeps `git merge upstream/main` conflict-free, since every
+other path is byte-identical to `bitnami/containers`.
 
 **The acl/attr advisories (CVE-2026-54369/-54370/-54371) are unfixable on any Debian base.**
 `libacl1` arrives via `coreutils`, `passwd`, `sed` and `tar`; trixie is pinned to the
 unfixed acl 2.3.2 / attr 2.5.2, marked `no-dsa` with the fix landing in unstable first.
 Wolfi packages the fixed acl 2.4.0 / attr 2.6.0, so the `wolfi/` variants clear them
-outright. Docker Hardened Images do **not** — evaluated 2026-09-15 and rejected: DHI
+outright. This is the concrete reason the rule above exists: no amount of Dockerfile work
+on a Debian base clears these three. Docker Hardened Images do **not** — evaluated 2026-09-15 and rejected: DHI
 rebuilds those same unfixed sources and waives the findings with an OpenVEX
 `not_affected` statement, so any scanner that does not consume that VEX still reports all
 three. Do not re-propose a DHI rebase.

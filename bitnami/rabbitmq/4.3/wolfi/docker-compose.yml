@@ -3,7 +3,7 @@
 
 services:
   rabbitmq:
-    # Published as insightfinderinc/bitnami-rabbitmq:4.3.5-debian-13-r1
+    # Published as insightfinderinc/bitnami-rabbitmq:4.3.5-wolfi-r1
     # (linux/amd64 + linux/arm64). Building from this directory produces the
     # same image; compose reuses the local one once it exists.
     build:

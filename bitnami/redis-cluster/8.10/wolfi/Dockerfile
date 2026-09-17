@@ -4,16 +4,16 @@
 # ---------------------------------------------------------------------------
 # Redis Cluster 8.10.1 on Chainguard Wolfi.
 #
-# Variant of ../debian-13 that replaces docker.io/bitnami/minideb:trixie with
-# cgr.dev/chainguard/wolfi-base, for the same reason as the rabbitmq wolfi
+# Variant of the upstream ../debian-12 image that replaces the minideb base
+# with cgr.dev/chainguard/wolfi-base, for the same reason as the rabbitmq wolfi
 # variant: Wolfi packages the FIXED acl 2.4.0 and attr 2.6.0 releases, so
 # CVE-2026-54369, CVE-2026-54370 and CVE-2026-54371 are genuinely absent
 # rather than waived. Debian trixie is pinned to acl 2.3.2 / attr 2.5.2,
 # marked no-dsa with the fix landing in unstable first, and on any Debian base
 # libacl1 is unavoidable - it arrives via coreutils, passwd, sed and tar.
 #
-# The perl force-purge the debian-13 variant needs also disappears: Wolfi
-# installs no perl in the first place.
+# No perl force-purge is needed either: Wolfi installs no perl in the first
+# place, while every Debian base pulls it in through debconf.
 #
 # Build:
 #   docker build --platform linux/amd64,linux/arm64 \
@@ -26,9 +26,9 @@ ARG WOLFI_BASE="cgr.dev/chainguard/wolfi-base:latest"
 # Stage 1 - fetch and verify the prebuilt Bitnami components.
 #
 # Kept in its own stage so wget and its gnutls/idn2/nettle/psl dependency
-# chain never reach the runtime image. The debian-13 variant achieves the same
-# thing by installing wget and then uninstall_packages-ing it at the end; a
-# build stage is the cleaner expression of the same intent.
+# chain never reach the runtime image. A Debian base has to install wget and
+# then uninstall_packages it again at the end of the build; a separate stage is
+# the cleaner expression of the same intent.
 # ---------------------------------------------------------------------------
 FROM ${WOLFI_BASE} AS component
 USER 0

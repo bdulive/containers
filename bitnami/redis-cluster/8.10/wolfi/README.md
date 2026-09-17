@@ -1,7 +1,9 @@
 # Redis Cluster 8.10.1 on Chainguard Wolfi
 
-Variant of [`../debian-13`](../debian-13) that replaces
-`docker.io/bitnami/minideb:trixie` with `cgr.dev/chainguard/wolfi-base`.
+Variant of the upstream [`../debian-12`](../debian-12) image that replaces the
+`docker.io/bitnami/minideb` base with `cgr.dev/chainguard/wolfi-base`. This is the only
+hand-maintained variant of this image; a `debian-13`/minideb:trixie variant existed until
+2026-09-17 and was removed once Wolfi proved strictly better on every finding.
 
 Published as `insightfinderinc/bitnami-redis-cluster:8.10.1-wolfi-r1` (multi-arch,
 amd64+arm64), index digest
@@ -23,7 +25,7 @@ acl/attr findings are genuinely absent, not waived by a VEX statement.
 
 | variant | CRITICAL | HIGH | MEDIUM | LOW | total | of the 4 customer CVEs |
 |---|---|---|---|---|---|---|
-| `debian-13` r1 (published) | 0 | 42 | 46 | 56 | 145 | all 4 |
+| `debian-13` r1 (retired 2026-09-17) | 0 | 42 | 46 | 56 | 145 | all 4 |
 | **`wolfi`** | **0** | **0** | **1** | **0** | **1** | only the zlib one |
 
 Identical on `linux/amd64` and `linux/arm64`.
@@ -33,7 +35,7 @@ Docker 29's OCI layout cannot be read from the daemon directly):
 
 | variant | Trivy total | fixable | of the 4 customer CVEs |
 |---|---|---|---|
-| `debian-13` r1 (published) | 145 | **0** | all 4 |
+| `debian-13` r1 (retired 2026-09-17) | 145 | **0** | all 4 |
 | **`wolfi`** | **1** | **1** | only the zlib one |
 
 ### CVE-2026-85091 (zlib): patched in `-r1`, still reported by Trivy 0.74
@@ -80,13 +82,13 @@ docker build --platform linux/amd64,linux/arm64 \
 `TARGETARCH` selects the matching Bitnami component tarballs, each verified against the
 per-arch checksum already in `prebuildfs/opt/bitnami/checksums/`.
 
-## How it differs from the minideb variant
+## How it differs from a minideb variant
 
-- **No perl force-purge.** The debian-13 variant has to `dpkg --purge
+- **No perl force-purge.** A Debian base has to `dpkg --purge
   --force-remove-essential` perl as its final build step, with assertions guarding against
   a stale package list. Wolfi installs no perl at all, so the whole hazard disappears — the
   build asserts `! command -v perl` and that is the end of it.
-- **wget never enters the runtime image.** The debian-13 variant installs wget to fetch the
+- **wget never enters the runtime image.** A Debian base installs wget to fetch the
   components and then `uninstall_packages` it, to shed its gnutls/idn2/nettle/psl chain.
   Here the download happens in a separate build stage, which expresses the same intent
   without the install-then-remove dance.

@@ -11,12 +11,11 @@
 | `rootfs/opt/bitnami/scripts/librediscluster.sh`, `libredis.sh` | Redis-specific logic: config generation, cluster creation and node join. |
 | `prebuildfs/opt/bitnami/checksums/` | `sha256` files for the components the Dockerfile downloads. One file per component per arch; a component removed from the Dockerfile must have its checksum file removed too. |
 
-**Wolfi is where every future CVE fix goes.** An `8.10/debian-13/` variant on
-`minideb:trixie` existed until 2026-09-17 and was deleted — it could not clear the acl/attr
-advisories on any Debian base, it needed a `perl` force-purge and an install-then-purge
-dance for `wget` that Wolfi makes unnecessary, and it scanned 145 findings where Wolfi
-scans 1. Do not recreate a Debian-based variant to carry a fix. The reasoning that variant
-accumulated is preserved in the sections below, rewritten for the base we actually ship.
+**Wolfi is where every future CVE fix goes. Do not add a Debian-based variant to carry
+one.** No Debian base can clear the acl/attr advisories, and the workarounds a Debian base
+would need — a `perl` force-purge, installing `wget` only to purge it again — are simply
+unnecessary here. Measured 2026-09-17 against the upstream `debian-12` image built the same
+day with the same Trivy DB: 291 findings vs 1.
 
 ## Image composition
 
@@ -220,10 +219,12 @@ And confirm the composition assumptions held:
 
 ```console
 docker run --rm --entrypoint bash bitnami-redis-cluster:8.10.1-wolfi-r1 -c \
-  'command -v perl; command -v curl; command -v wget; apk info -v | grep -E "^(acl|attr|zlib)-"'
+  'command -v perl; command -v curl; command -v wget; apk info -v | grep -E "^(libacl1|libattr1|zlib)-"'
 ```
 
-Expect no perl, no curl, no wget, and the patched acl/attr/zlib versions.
+Expect no perl, no curl, no wget, and `libacl1-2.4.0-r3`, `libattr1-2.6.0-r3`,
+`zlib-1.3.2.1_rc20260601-r0`. The packages are named `libacl1` and `libattr1`, not
+`acl`/`attr` — a `^(acl|attr)` pattern matches nothing and reads as a pass.
 
 ## Upstream sync
 

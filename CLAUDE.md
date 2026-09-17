@@ -50,12 +50,15 @@ not a packaging preference:
 
 **Wolfi is the only flavour we remediate in. Any future CVE fix — for these images or a
 newly maintained one — goes into a `wolfi/` variant; do not add a Debian-based variant to
-carry it.** A `debian-13/` (`minideb:trixie`) variant of rabbitmq and redis-cluster existed
-until 2026-09-17 and was deleted: it could never clear the acl/attr advisories below, it
-needed an Erlang source build and a `perl` force-purge that Wolfi makes unnecessary, and it
-scanned far worse (rabbitmq 189 findings vs 1; redis-cluster 145 vs 1). Keeping the fork to
-`debian-12/` plus `wolfi/` also keeps `git merge upstream/main` conflict-free, since every
-other path is byte-identical to `bitnami/containers`.
+carry it.** No Debian base can clear the acl/attr advisories below at all, and the ones
+that would have to be worked around on Debian — an Erlang source build, a `perl`
+force-purge, installing `wget` only to purge it again — are simply absent on Wolfi.
+Measured on 2026-09-17 against the upstream `debian-12` images built the same day with the
+same Trivy DB: rabbitmq 403 findings vs 1, redis-cluster 291 vs 1, with all four customer
+CVEs present on `debian-12` and only the zlib scanner-lag row left on Wolfi. Keeping the
+fork to `debian-12/` plus `wolfi/` also keeps `git merge upstream/main` conflict-free — a
+265-commit upstream merge on 2026-09-17 landed with zero conflicts — since every other path
+is byte-identical to `bitnami/containers`.
 
 **The acl/attr advisories (CVE-2026-54369/-54370/-54371) are unfixable on any Debian base.**
 `libacl1` arrives via `coreutils`, `passwd`, `sed` and `tar`; trixie is pinned to the

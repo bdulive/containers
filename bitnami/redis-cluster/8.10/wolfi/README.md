@@ -2,13 +2,17 @@
 
 Variant of the upstream [`../debian-12`](../debian-12) image that replaces the
 `docker.io/bitnami/minideb` base with `cgr.dev/chainguard/wolfi-base`. This is the only
-hand-maintained variant of this image; a `debian-13`/minideb:trixie variant existed until
-2026-09-17 and was removed once Wolfi proved strictly better on every finding.
+hand-maintained variant of this image; every local CVE fix goes here.
 
 Published as `insightfinderinc/bitnami-redis-cluster:8.10.1-wolfi-r1` (multi-arch,
 amd64+arm64), index digest
 `sha256:1e91ad6a0f61e1c109d0287f9f31538c4b9f516b574efebe3da41e71d69b7d85`.
-`-r1` is a rebuild of `-r0` that picks up the patched `zlib` (see below).
+
+The tree now carries the `wait-for-port 1.0.11-3` component from the upstream
+`8.10.1-debian-12-r1` release pulled on 2026-09-17, **still under the `-r1` tag** rather
+than a new revision. Rebuilt, scanned and functionally tested on both `linux/amd64` and
+`linux/arm64`; not yet pushed. Note that pushing will replace the digest above with
+different content under the same tag.
 
 ## Why this exists
 
@@ -23,20 +27,19 @@ acl/attr findings are genuinely absent, not waived by a VEX statement.
 
 ### Scan comparison (Trivy)
 
-| variant | CRITICAL | HIGH | MEDIUM | LOW | total | of the 4 customer CVEs |
-|---|---|---|---|---|---|---|
-| `debian-13` r1 (retired 2026-09-17) | 0 | 42 | 46 | 56 | 145 | all 4 |
-| **`wolfi`** | **0** | **0** | **1** | **0** | **1** | only the zlib one |
-
-Identical on `linux/amd64` and `linux/arm64`.
-
 Scanned with Trivy through the exported filesystem (`docker export` + `trivy rootfs`;
 Docker 29's OCI layout cannot be read from the daemon directly):
 
-| variant | Trivy total | fixable | of the 4 customer CVEs |
-|---|---|---|---|
-| `debian-13` r1 (retired 2026-09-17) | 145 | **0** | all 4 |
-| **`wolfi`** | **1** | **1** | only the zlib one |
+| variant | CRITICAL | HIGH | MEDIUM | LOW | total | fixable | of the 4 customer CVEs |
+|---|---|---|---|---|---|---|---|
+| upstream `debian-12` (8.10.1-r0, measured 2026-09-17) | 13 | 67 | 120 | 90 | 291 | 0 | all 4 |
+| **`wolfi`** | **0** | **0** | **1** | **0** | **1** | **1** | only the zlib one |
+
+Identical on `linux/amd64` and `linux/arm64`. The `debian-12` row is the upstream image
+built from `../debian-12` unmodified on the same day with the same Trivy DB - same
+components, same scanner, same hour. It reports zero fixable findings, so the pass
+condition alone would wave it through; the per-CVE delta is what carries the argument.
+Image size is 148MB against 435MB for that baseline.
 
 ### CVE-2026-85091 (zlib): patched in `-r1`, still reported by Trivy 0.74
 

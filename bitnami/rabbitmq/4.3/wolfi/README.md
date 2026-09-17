@@ -1,13 +1,16 @@
-# RabbitMQ 4.3.5 on Chainguard Wolfi
+# RabbitMQ 4.3.6 on Chainguard Wolfi
 
 Variant of the upstream [`../debian-12`](../debian-12) image that replaces the
 `docker.io/bitnami/minideb` base with `cgr.dev/chainguard/wolfi-base`. This is the only
-hand-maintained variant of this image; a `debian-13`/minideb:trixie variant existed until
-2026-09-17 and was removed once Wolfi proved strictly better on every finding.
+hand-maintained variant of this image; every local CVE fix goes here.
 
-Published as `insightfinderinc/bitnami-rabbitmq:4.3.5-wolfi-r1` (multi-arch, amd64+arm64),
-index digest `sha256:6e67d3530bd937e82681d6b0bfea79696d173951499ea12a7dbe4b75817c2317`.
-`-r1` is a rebuild of `-r0` that picks up the patched `zlib` (see below).
+Current build is `4.3.6-wolfi-r0`, tracking the upstream `4.3.6-debian-12-r0` release
+pulled on 2026-09-17. **Built, scanned and functionally tested on both `linux/amd64` and
+`linux/arm64`; not yet published.**
+
+Previously published: `insightfinderinc/bitnami-rabbitmq:4.3.5-wolfi-r1` (multi-arch,
+amd64+arm64), index digest
+`sha256:6e67d3530bd937e82681d6b0bfea79696d173951499ea12a7dbe4b75817c2317`.
 
 ## Why this exists
 
@@ -24,21 +27,26 @@ Wolfi packages the **fixed** releases — `libacl1 2.4.0` and `libattr1 2.6.0` �
 acl/attr findings are genuinely absent, not waived.
 
 It also packages `erlang-27` at exactly **27.3.4.17** — the OTP patch release several
-advisories require, which Bitnami publishes no component for and the retired minideb variant
-had to compile from source — so no Erlang source build is needed. The Dockerfile
-asserts that version at build time: a silent downgrade would reintroduce fixed OTP
-advisories.
+advisories require and Bitnami publishes no component for — so the image needs no Erlang
+source build. The Dockerfile asserts that version at build time: a silent downgrade would
+reintroduce fixed OTP advisories.
 
 ### Scan comparison (Trivy)
 
-| variant | CRITICAL | HIGH | MEDIUM | LOW | total | of the 4 customer CVEs |
-|---|---|---|---|---|---|---|
-| `debian-13` r1 (retired 2026-09-17) | 0 | 44 | 72 | 72 | 189 | all 4 |
-| `dhi.io/debian-base` rebase (tested, not kept) | 0 | 13 | 35 | 34 | 82 | all 4 |
-| **`wolfi`** | **0** | **0** | **1** | **0** | **1** | only the zlib one |
+| variant | CRITICAL | HIGH | MEDIUM | LOW | total | fixable | of the 4 customer CVEs |
+|---|---|---|---|---|---|---|---|
+| upstream `debian-12` (4.3.5-r1, measured 2026-09-17) | 13 | 78 | 173 | 138 | 403 | 0 | all 4 |
+| **`wolfi` 4.3.6-r0** | **0** | **0** | **1** | **0** | **1** | **1** | only the zlib one |
+| `dhi.io/debian-base` rebase (tested, not kept) | 0 | 13 | 35 | 34 | 82 | - | all 4 |
+| **`wolfi`** | **0** | **0** | **1** | **0** | **1** | **1** | only the zlib one |
 
-Identical on `linux/amd64` and `linux/arm64`. The row above is `-r0`, which shipped
-`zlib 1.3.2-r6`.
+Identical on `linux/amd64` and `linux/arm64`. The `debian-12` row is the upstream image
+built from `../debian-12` unmodified on the same day with the same Trivy DB, which is the
+apples-to-apples baseline: same components, same scanner, same hour. It reports **13
+CRITICAL and zero fixable** - the pass condition alone would wave it through, which is why
+the per-CVE delta and not the fixable count is the evidence that matters here.
+
+The DHI row was measured earlier, against `-r0`, which shipped `zlib 1.3.2-r6`.
 
 ### CVE-2026-85091 (zlib): patched in `-r1`, still reported by Trivy 0.74
 
@@ -73,7 +81,7 @@ No subscription or credentials needed — `cgr.dev/chainguard/wolfi-base` is pub
 
 ```console
 docker build --platform linux/amd64,linux/arm64 \
-  -t bitnami-rabbitmq:4.3.5-wolfi-r1 --load .
+  -t bitnami-rabbitmq:4.3.6-wolfi-r0 --load .
 ```
 
 `TARGETARCH` selects the matching Bitnami component tarball, and each is verified against
@@ -99,7 +107,8 @@ the per-arch checksum already in `prebuildfs/opt/bitnami/checksums/`.
   `apk` instead of `apt`, keeping the same contract.
 - **uid 1001 is created explicitly.** `wolfi-base` only ships `nonroot` (65532).
 
-Image is 513MB against 708MB for the retired `4.3.5-debian-13-r1`.
+Image is 515MB against 693MB for the upstream `debian-12` image built from the same
+components on 2026-09-17.
 
 ## Verification
 
@@ -107,7 +116,7 @@ Built and tested on **both linux/amd64 and linux/arm64**; every check below pass
 identically on each.
 
 - Boots through the full Bitnami entrypoint to `Server startup complete; 3 plugins started`
-  within 20s, RabbitMQ 4.3.5 on `erts 15.2.7.13` (OTP 27.3.4.17).
+  within 20s, RabbitMQ 4.3.6 on `erts 15.2.7.13` (OTP 27.3.4.17).
 - Queue declare, publish and consume round-trip through the management API; the published
   payload comes back intact.
 - `rabbitmq-diagnostics check_running` reports "fully booted and running", and

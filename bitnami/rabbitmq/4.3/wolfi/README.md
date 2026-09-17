@@ -3,7 +3,9 @@
 Variant of [`../debian-13`](../debian-13) that replaces
 `docker.io/bitnami/minideb:trixie` with `cgr.dev/chainguard/wolfi-base`.
 
-Built as `bitnami-rabbitmq:4.3.5-wolfi-r0`. Not published.
+Published as `insightfinderinc/bitnami-rabbitmq:4.3.5-wolfi-r1` (multi-arch, amd64+arm64),
+index digest `sha256:6e67d3530bd937e82681d6b0bfea79696d173951499ea12a7dbe4b75817c2317`.
+`-r1` is a rebuild of `-r0` that picks up the patched `zlib` (see below).
 
 ## Why this exists
 
@@ -32,22 +34,35 @@ advisories.
 | `dhi.io/debian-base` rebase (tested, not kept) | 0 | 13 | 35 | 34 | 82 | all 4 |
 | **`wolfi`** | **0** | **0** | **1** | **0** | **1** | only the zlib one |
 
-Identical on `linux/amd64` and `linux/arm64`. The single remaining finding is
-`CVE-2026-85091` on `zlib 1.3.2-r6`. Chainguard's feed already names the fix (`1.3.3-r0`);
-it is not yet published to the repo, so it clears itself on a later rebuild.
+Identical on `linux/amd64` and `linux/arm64`. The row above is `-r0`, which shipped
+`zlib 1.3.2-r6`.
 
-Note that **`trivy --ignore-unfixed` is not empty**, so the repo's pass condition is not
-met: the fix identifier `1.3.3-r0` is published but has not reached the apk repo yet
-(newest available is `1.3.2-r7`). Debian trixie's zlib is upstream 1.3.1, *below* the
-affected range, so the same advisory reads as unfixable-but-inapplicable there and
-fixable-and-real here. The trade is 189 findings with **zero** fixable against 1 finding
-with **one** fixable. Rebuild once `1.3.3-r0` lands and it clears.
+### CVE-2026-85091 (zlib): patched in `-r1`, still reported by Trivy 0.74
 
-A scan taken before the move to Trivy-only also reported this same issue under its GHSA
-alias, `GHSA-g5fp-32jq-cfw2` — one underlying issue, not two.
+`-r1` ships **`zlib 1.3.2.1_rc20260601-r0`**, which carries the fix. The evidence, in the
+order it was checked on 2026-09-17:
+
+- Chainguard's `zlib.yaml` builds the develop-branch snapshot with
+  `0001-gz_write-don-t-keep-a-pointer-into-callers-buffer-on.patch`, authored 2026-09-15 —
+  the backport of upstream `madler/zlib` commit `df84af25dc`, "Fix buffer overflow bug in
+  non-blocking gzwrite".
+- The installed package's apk metadata records build time `1789526845` = 2026-09-16
+  02:47 UTC, i.e. **after** that patch.
+- Both `packages.wolfi.dev/os/security.json` and `packages.cgr.dev/chainguard/security.json`
+  now list `CVE-2026-85091` / `GHSA-g5fp-32jq-cfw2` as fixed in exactly
+  `1.3.2.1_rc20260601-r0`. The earlier `1.3.3-r0` identifier was superseded — **do not wait
+  for a 1.3.3 package; upstream has no such tag** (newest is `v1.3.2`).
+- Docker Scout reads the live feed and reports **0 vulnerabilities** on this image.
+
+**Trivy 0.74 still reports the finding.** Its bundled DB (built 2026-09-16 19:39 UTC, the
+newest published as of this rebuild) carries the stale `1.3.3-r0` fixed-version, and
+`1.3.2.1_rc20260601-r0` sorts below it, so the row is emitted anyway. This is a scanner-DB
+lag, not a package state — it should clear on the next Trivy DB build without any change to
+the image. Until then `trivy --ignore-unfixed` is non-empty on this variant and the
+divergence is a known, dated one rather than an open finding.
 
 **Do not pin zlib backwards to dodge it.** `1.3.1.2-r3` is still inside the CVE's affected
-range (1.3.1.2–1.3.2) *and* adds `CVE-2026-27171`. Take 1.3.2 and rebuild when 1.3.3 lands.
+range (1.3.1.2–1.3.2) *and* adds `CVE-2026-27171`.
 
 ## Build
 
@@ -55,7 +70,7 @@ No subscription or credentials needed — `cgr.dev/chainguard/wolfi-base` is pub
 
 ```console
 docker build --platform linux/amd64,linux/arm64 \
-  -t bitnami-rabbitmq:4.3.5-wolfi-r0 --load .
+  -t bitnami-rabbitmq:4.3.5-wolfi-r1 --load .
 ```
 
 `TARGETARCH` selects the matching Bitnami component tarball, and each is verified against
@@ -96,6 +111,9 @@ identically on each.
   `check_port_connectivity` connects on 5672, 15672 and 25672.
 - Runs as `uid=1001(rabbitmq) gid=0(root)`, `LANG=en_US.UTF-8`.
 - `libacl1 2.4.0-r3`, `libattr1 2.6.0-r3`, `erlang-27 27.3.4.17-r0` on both.
+- `-r1` additionally: `zlib 1.3.2.1_rc20260601-r0` on both arches, and a
+  `zlib:gzip`/`zlib:gunzip` round-trip of 100 kB through the Erlang runtime (which links
+  `libz`) returns the input byte-for-byte, so the patched zlib is a working one.
 - The binaries really are per-arch, not a mislabelled manifest: `beam.smp` carries ELF
   `e_machine` 0x3e (x86-64) in the amd64 image and 0xb7 (aarch64) in the arm64 image.
 

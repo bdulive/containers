@@ -61,7 +61,7 @@ ARG TARGETARCH
 ARG OTP_VERSION="27.3.4.17"
 
 LABEL org.opencontainers.image.base.name="${WOLFI_BASE}" \
-      org.opencontainers.image.created="2026-09-15T00:00:00Z" \
+      org.opencontainers.image.created="2026-09-17T00:00:00Z" \
       org.opencontainers.image.description="Application packaged by Broadcom, Inc." \
       org.opencontainers.image.documentation="https://github.com/bitnami/containers/tree/main/bitnami/rabbitmq/README.md" \
       org.opencontainers.image.source="https://github.com/bitnami/containers/tree/main/bitnami/rabbitmq" \
@@ -145,7 +145,7 @@ RUN /opt/bitnami/scripts/rabbitmq/postunpack.sh
 
 ENV APP_VERSION="4.3.5" \
     BITNAMI_APP_NAME="rabbitmq" \
-    IMAGE_REVISION="0" \
+    IMAGE_REVISION="1" \
     LANG="en_US.UTF-8" \
     LANGUAGE="en_US:en"
 

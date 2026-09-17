@@ -91,19 +91,35 @@ Debian, so **none of the script-level divergence below is needed**: the rejectio
 in the next section is about replacing the GNU userland with applets, not about the base.
 The 6-node cluster bootstraps correctly on both arches, `REDIS_NODES` included.
 
-One caveat, and it is the reason this does not simply supersede the Debian variant:
-`trivy --ignore-unfixed` is **not** empty on the Wolfi image. Wolfi ships `zlib 1.3.2-r6`,
-which is inside CVE-2026-85091's affected range (1.3.1.2-1.3.2) and has a *published fix
-identifier* (`1.3.3-r0`) that has not yet reached the apk repo - latest is `1.3.2-r7`. So
-Wolfi trades 138 findings with **zero fixable** for 3 findings with **two fixable** (the
-zlib CVE plus its GHSA alias). Debian's trixie zlib is upstream 1.3.1, below the affected
-range, which is why the same advisory is unfixable-but-arguably-inapplicable there and
-fixable-and-real here. Rebuild the Wolfi image once `zlib 1.3.3-r0` lands; until then the
-repo's stated pass condition is not met, and that is a deliberate, documented trade rather
-than an oversight.
+### CVE-2026-85091 (zlib) on Wolfi: fixed in the package, still reported by Trivy
 
-Do not pin zlib backwards to dodge it: `1.3.1.2-r3` is still inside the range *and* adds
-CVE-2026-27171.
+The `-r0` images shipped `zlib 1.3.2-r6`, inside the advisory's range, with the fix named
+as a version (`1.3.3-r0`) that had not reached the apk repo. **That identifier was
+superseded.** Chainguard backported the fix instead - upstream `madler/zlib` commit
+`df84af25dc` ("Fix buffer overflow bug in non-blocking gzwrite"), carried as
+`0001-gz_write-don-t-keep-a-pointer-into-callers-buffer-on.patch` in `zlib.yaml` - and both
+`packages.wolfi.dev/os/security.json` and `packages.cgr.dev/chainguard/security.json` now
+name the fixed version as **`1.3.2.1_rc20260601-r0`**, which is what `apk` installs today.
+The `-r1` rebuild (2026-09-17) carries it, and Docker Scout reports 0 findings on both
+images.
+
+**Do not wait for a zlib 1.3.3 package.** Upstream has no such tag; `v1.3.2` is the newest,
+and `1.3.2.1_rc20260601` is a develop-branch snapshot Chainguard versioned with an `_rc`
+suffix deliberately so a future real 1.3.2.1 sorts above it.
+
+Trivy 0.74 still emits the row: its DB (built 2026-09-16 19:39 UTC) carries the stale
+`1.3.3-r0` fixed-version, above the installed one. This is scanner-DB lag, not package
+state, and it should clear on a later DB build with no image change. **Re-check with
+`trivy image --download-db-only` and rescan before treating it as a real finding** - and
+before concluding a rebuild is needed, compare the installed version against the *secdb*:
+
+```console
+curl -sS https://packages.wolfi.dev/os/security.json | \
+  jq '.packages[] | select(.pkg.name=="zlib") | .pkg.secfixes'
+```
+
+Do not pin zlib backwards to dodge any of this: `1.3.1.2-r3` is still inside the range
+*and* adds CVE-2026-27171.
 
 ### Do not retry: removing libacl1/libattr1 by swapping the userland
 

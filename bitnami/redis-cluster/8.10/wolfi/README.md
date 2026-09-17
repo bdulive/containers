@@ -3,7 +3,10 @@
 Variant of [`../debian-13`](../debian-13) that replaces
 `docker.io/bitnami/minideb:trixie` with `cgr.dev/chainguard/wolfi-base`.
 
-Built as `bitnami-redis-cluster:8.10.1-wolfi-r0`.
+Published as `insightfinderinc/bitnami-redis-cluster:8.10.1-wolfi-r1` (multi-arch,
+amd64+arm64), index digest
+`sha256:1e91ad6a0f61e1c109d0287f9f31538c4b9f516b574efebe3da41e71d69b7d85`.
+`-r1` is a rebuild of `-r0` that picks up the patched `zlib` (see below).
 
 ## Why this exists
 
@@ -33,19 +36,30 @@ Docker 29's OCI layout cannot be read from the daemon directly):
 | `debian-13` r1 (published) | 145 | **0** | all 4 |
 | **`wolfi`** | **1** | **1** | only the zlib one |
 
-### The one way this does not yet beat the Debian variant
+### CVE-2026-85091 (zlib): patched in `-r1`, still reported by Trivy 0.74
 
-**`trivy --ignore-unfixed` is not empty here**, so the repo's stated pass condition is not
-met.
-Wolfi ships `zlib 1.3.2-r6`, which sits inside CVE-2026-85091's affected range
-(1.3.1.2–1.3.2) and has a published fix identifier, `1.3.3-r0`, that has **not yet reached
-the apk repo** — the newest available is `1.3.2-r7`. Debian trixie's zlib is upstream 1.3.1,
-*below* the affected range, which is why the same advisory reads as unfixable-and-arguably-
-inapplicable there but fixable-and-real here.
+The tables above are `-r0`, which shipped `zlib 1.3.2-r6`. `-r1` ships
+**`zlib 1.3.2.1_rc20260601-r0`**, which carries the fix. The evidence, in the order it was
+checked on 2026-09-17:
 
-So the honest trade is: 138 findings with zero fixable, versus 3 findings with two fixable
-(the zlib CVE and its GHSA alias). Rebuild once `zlib 1.3.3-r0` lands and this goes to a
-clean `--only-fixed`.
+- Chainguard's `zlib.yaml` builds the develop-branch snapshot with
+  `0001-gz_write-don-t-keep-a-pointer-into-callers-buffer-on.patch`, authored 2026-09-15 —
+  the backport of upstream `madler/zlib` commit `df84af25dc`, "Fix buffer overflow bug in
+  non-blocking gzwrite".
+- The installed package's apk metadata records build time `1789526845` = 2026-09-16
+  02:47 UTC, i.e. **after** that patch.
+- Both `packages.wolfi.dev/os/security.json` and `packages.cgr.dev/chainguard/security.json`
+  now list `CVE-2026-85091` / `GHSA-g5fp-32jq-cfw2` as fixed in exactly
+  `1.3.2.1_rc20260601-r0`. The earlier `1.3.3-r0` identifier was superseded — **do not wait
+  for a 1.3.3 package; upstream has no such tag** (newest is `v1.3.2`).
+- Docker Scout reads the live feed and reports **0 vulnerabilities** on this image.
+
+**Trivy 0.74 still reports the finding.** Its bundled DB (built 2026-09-16 19:39 UTC, the
+newest published as of this rebuild) carries the stale `1.3.3-r0` fixed-version, and
+`1.3.2.1_rc20260601-r0` sorts below it, so the row is emitted anyway. This is a scanner-DB
+lag, not a package state — it should clear on the next Trivy DB build without any change to
+the image. Until then `trivy --ignore-unfixed` is non-empty on this variant and the
+divergence is a known, dated one rather than an open finding.
 
 **Do not pin zlib backwards to dodge it.** `1.3.1.2-r3` is still inside the affected range
 *and* adds `CVE-2026-27171`.
@@ -60,7 +74,7 @@ No subscription or credentials needed — `cgr.dev/chainguard/wolfi-base` is pub
 
 ```console
 docker build --platform linux/amd64,linux/arm64 \
-  -t bitnami-redis-cluster:8.10.1-wolfi-r0 --load .
+  -t bitnami-redis-cluster:8.10.1-wolfi-r1 --load .
 ```
 
 `TARGETARCH` selects the matching Bitnami component tarballs, each verified against the
@@ -102,6 +116,9 @@ A full 6-node cluster was brought up from `docker-compose.yml` on each architect
   cluster returned to `cluster_state:ok` with all 16384 slots within 5s, and every key
   written before the kill was still readable afterwards.
 - `redis-server` reports `v=8.10.1`, `redis-cli 8.10.1`, no perl in the image.
+- `-r1` additionally: `zlib 1.3.2.1_rc20260601-r0`, `libacl1 2.4.0-r3` and
+  `libattr1 2.6.0-r3` on both arches; the 6-node bring-up, cross-slot key round-trip and
+  master-kill failover were all re-run on `-r1` and passed unchanged.
 - Per-arch binaries confirmed, not a mislabelled manifest: `redis-server` carries ELF
   `e_machine` 0x3e (x86-64) in the amd64 image and 0xb7 (aarch64) in the arm64 image.
 
